@@ -1,6 +1,9 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin "@tailwindcss/typography";
 
-@import "tw-animate-css";
+/* 1. Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;700&display=swap');
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -8,10 +11,14 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+    /* 2. Definisi Font Family Sesuai Desain */
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-mono:
+        'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        monospace;
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -45,12 +52,6 @@
     --color-input: var(--input);
     --color-ring: var(--ring);
 
-    --color-chart-1: var(--chart-1);
-    --color-chart-2: var(--chart-2);
-    --color-chart-3: var(--chart-3);
-    --color-chart-4: var(--chart-4);
-    --color-chart-5: var(--chart-5);
-
     --color-sidebar: var(--sidebar);
     --color-sidebar-foreground: var(--sidebar-foreground);
     --color-sidebar-primary: var(--sidebar-primary);
@@ -61,32 +62,39 @@
     --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* 3. Base Variables (Light Mode - Clean Fallback) */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --background: oklch(0.985 0 0); /* Slate 50 */
+    --foreground: oklch(0.13 0.028 261.692); /* Slate 900 */
+
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.13 0.028 261.692);
+
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.13 0.028 261.692);
+
+    --primary: oklch(0.21 0.034 264.665); /* Navy Blue for Light Mode */
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+
+    --secondary: oklch(0.967 0.003 264.542);
+    --secondary-foreground: oklch(0.21 0.034 264.665);
+
+    --muted: oklch(0.967 0.003 264.542);
+    --muted-foreground: oklch(0.552 0.013 259.61);
+
+    --accent: oklch(0.967 0.003 264.542);
+    --accent-foreground: oklch(0.21 0.034 264.665);
+
     --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
+    --destructive-foreground: oklch(0.985 0 0);
+
+    --border: oklch(0.92 0.004 264.542);
+    --input: oklch(0.92 0.004 264.542);
+    --ring: oklch(0.21 0.034 264.665);
+
     --radius: 0.625rem;
+
+    /* Sidebar specific */
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: oklch(0.205 0 0);
@@ -97,39 +105,51 @@
     --sidebar-ring: oklch(0.87 0 0);
 }
 
+/* 4. DARK MODE (THE WEB3 THEME) */
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    /* Background: Deep Navy (#020617) */
+    --background: #020617;
+    /* Foreground: Off-white (#F8FAFC) */
+    --foreground: #f8fafc;
+
+    /* Card: Slightly Lighter Navy (#0F172A) */
+    --card: #0f172a;
+    --card-foreground: #f8fafc;
+
+    --popover: #0f172a;
+    --popover-foreground: #f8fafc;
+
+    /* Primary: Cyan/Electric Blue (#06B6D4) */
+    --primary: #06b6d4;
+    --primary-foreground: #020617;
+
+    /* Secondary: Electric Purple (#6366F1) */
+    --secondary: #6366f1;
+    --secondary-foreground: #ffffff;
+
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+
+    /* Accent: Used for hover states */
+    --accent: #1e293b;
+    --accent-foreground: #22d3ee;
+
     --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    --destructive-foreground: oklch(0.985 0 0);
+
+    --border: #1e293b;
+    --input: #1e293b;
+    --ring: #06b6d4;
+
+    /* Sidebar Dark */
+    --sidebar: #020617;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-primary: #06b6d4;
+    --sidebar-primary-foreground: #020617;
+    --sidebar-accent: #1e293b;
+    --sidebar-accent-foreground: #f8fafc;
+    --sidebar-border: #1e293b;
+    --sidebar-ring: #06b6d4;
 }
 
 @layer base {
@@ -138,6 +158,71 @@
     }
 
     body {
-        @apply bg-background text-foreground;
+        @apply bg-background font-sans text-foreground antialiased;
+        /* Memastikan background warna navy teraplikasi */
     }
+
+    /* Heading Font Override */
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        font-family: var(--font-heading);
+    }
+}
+
+/* 5. Custom Utilities untuk Web3 Aesthetic */
+@layer utilities {
+    /* Grid Pattern Background */
+    .bg-grid-pattern {
+        background-size: 50px 50px;
+        background-image:
+            linear-gradient(
+                to right,
+                rgba(30, 41, 59, 0.5) 1px,
+                transparent 1px
+            ),
+            linear-gradient(
+                to bottom,
+                rgba(30, 41, 59, 0.5) 1px,
+                transparent 1px
+            );
+        mask-image: radial-gradient(
+            circle at center,
+            black 40%,
+            transparent 100%
+        );
+        -webkit-mask-image: radial-gradient(
+            circle at center,
+            black 40%,
+            transparent 100%
+        );
+    }
+
+    /* Custom Scrollbar */
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+}
+
+/* Global Styles untuk Scrollbar (Chrome/Edge/Safari) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #020617; /* Navy */
+}
+::-webkit-scrollbar-thumb {
+    background: #1e293b; /* Slate 800 */
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #06b6d4; /* Cyan Accent Hover */
 }

@@ -10,18 +10,9 @@ import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 import { Form, Head } from '@inertiajs/react';
+import PropTypes from 'prop-types'; // Optional: Best practice untuk JS
 
-interface LoginProps {
-    status?: string;
-    canResetPassword: boolean;
-    canRegister: boolean;
-}
-
-export default function Login({
-    status,
-    canResetPassword,
-    canRegister,
-}: LoginProps) {
+export default function Login({ status, canResetPassword, canRegister }) {
     return (
         <AuthLayout
             title="Log in to your account"
@@ -118,3 +109,10 @@ export default function Login({
         </AuthLayout>
     );
 }
+
+// Validasi props (Pengganti Interface TypeScript)
+Login.propTypes = {
+    status: PropTypes.string,
+    canResetPassword: PropTypes.bool,
+    canRegister: PropTypes.bool,
+};

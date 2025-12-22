@@ -17,6 +17,7 @@ export default function Register() {
             description="Enter your details below to create your account"
         >
             <Head title="Register" />
+
             <Form
                 {...store.form()}
                 resetOnSuccess={['password', 'password_confirmation']}
@@ -26,6 +27,7 @@ export default function Register() {
                 {({ processing, errors }) => (
                     <>
                         <div className="grid gap-6">
+                            {/* Name Field */}
                             <div className="grid gap-2">
                                 <Label htmlFor="name">Name</Label>
                                 <Input
@@ -44,6 +46,7 @@ export default function Register() {
                                 />
                             </div>
 
+                            {/* Email Field */}
                             <div className="grid gap-2">
                                 <Label htmlFor="email">Email address</Label>
                                 <Input
@@ -58,6 +61,7 @@ export default function Register() {
                                 <InputError message={errors.email} />
                             </div>
 
+                            {/* Password Field */}
                             <div className="grid gap-2">
                                 <Label htmlFor="password">Password</Label>
                                 <Input
@@ -72,6 +76,7 @@ export default function Register() {
                                 <InputError message={errors.password} />
                             </div>
 
+                            {/* Confirm Password Field */}
                             <div className="grid gap-2">
                                 <Label htmlFor="password_confirmation">
                                     Confirm password
@@ -90,17 +95,20 @@ export default function Register() {
                                 />
                             </div>
 
+                            {/* Submit Button */}
                             <Button
                                 type="submit"
                                 className="mt-2 w-full"
                                 tabIndex={5}
                                 data-test="register-user-button"
+                                disabled={processing}
                             >
                                 {processing && <Spinner />}
                                 Create account
                             </Button>
                         </div>
 
+                        {/* Login Link */}
                         <div className="text-center text-sm text-muted-foreground">
                             Already have an account?{' '}
                             <TextLink href={login()} tabIndex={6}>

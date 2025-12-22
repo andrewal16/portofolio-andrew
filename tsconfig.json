@@ -113,5 +113,5 @@
         },
         "jsx": "react-jsx"
     },
-    "include": ["resources/js/**/*.ts", "resources/js/**/*.d.ts", "resources/js/**/*.tsx"]
+    "include": ["resources/js/**/*.ts", "resources/js/**/*.d.ts", "resources/js/**/*.tsx", "resources/js/layouts/app-layout.jsx", "resources/js/pages/auth/login.jsx", "resources/js/pages/auth/register.jsx", "resources/js/pages/auth/confirm-password.jsx", "resources/js/pages/auth/forgot-password.jsx", "resources/js/pages/auth/two-factor-challenge.jsx", "resources/js/pages/auth/verify-email.jsx"]
 }
