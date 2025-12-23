@@ -123,20 +123,16 @@ class ProjectController extends Controller
         ]);
     }
 
-    /**
-     * Update the specified project in storage.
-     */
     public function update(UpdateProjectRequest $request, Project $project)
     {
         $data = $request->validated();
 
         try {
-            // 1. Handle Thumbnail dengan robust error handling
             if ($request->hasFile('thumbnail')) {
-                // Hapus file lama HANYA jika URL-nya valid Cloudinary
-                if ($project->thumbnail_url && str_contains($project->thumbnail_url, 'cloudinary.com')) {
-                    $this->deleteFromCloudinary($project->thumbnail_url);
-                }
+                // ❌ COMMENT DULU bagian delete untuk test
+                // if ($project->thumbnail_url && str_contains($project->thumbnail_url, 'cloudinary.com')) {
+                //     $this->deleteFromCloudinary($project->thumbnail_url);
+                // }
 
                 // Upload thumbnail baru
                 $data['thumbnail_url'] = $this->uploadToCloudinary(
@@ -147,12 +143,10 @@ class ProjectController extends Controller
 
             unset($data['thumbnail']);
 
-            // 2. Decode technologies dari React
             if ($request->has('technologies')) {
                 $data['technologies'] = json_decode($request->technologies, true) ?? [];
             }
 
-            // 3. Update project
             $project->update($data);
 
             return redirect()
@@ -160,15 +154,14 @@ class ProjectController extends Controller
                 ->with('success', 'Project berhasil diupdate!');
 
         } catch (\Exception $e) {
-            Log::error('Error updating project', [
-                'project_id' => $project->id,
+            Log::error('Update failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
             return back()
-                ->withInput()
-                ->withErrors(['error' => 'Gagal update project: '.$e->getMessage()]);
+                ->withErrors(['error' => $e->getMessage()])
+                ->withInput();
         }
     }
 
