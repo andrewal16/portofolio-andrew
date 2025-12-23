@@ -12,11 +12,12 @@ import {
     TwitterOutlined,
 } from '@ant-design/icons';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { Modal, message } from 'antd'; // Import Message Antd
+import { Modal, message } from 'antd';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { TextPlugin } from 'gsap/TextPlugin';
 import { useEffect, useRef, useState } from 'react';
+import { BackgroundGradientAnimation } from '../../../../components/ui/background-gradient-animation';
 
 // Register GSAP Plugins
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
@@ -32,7 +33,6 @@ export default function PortfolioIndex({
     const [previewCert, setPreviewCert] = useState(null);
 
     // Pagination Logic
-    // Kita cek apakah projects.data ada (karena sekarang pakai paginate)
     const [projectList, setProjectList] = useState(projects.data || []);
     const [nextPageUrl, setNextPageUrl] = useState(projects.next_page_url);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -181,7 +181,6 @@ export default function PortfolioIndex({
             });
             if (res.ok) {
                 const json = await res.json();
-                // Adaptasi struktur JSON Laravel Pagination
                 const newData = json.data || json.projects?.data || [];
                 const newNext =
                     json.next_page_url || json.projects?.next_page_url;
@@ -189,7 +188,6 @@ export default function PortfolioIndex({
                 setProjectList((prev) => [...prev, ...newData]);
                 setNextPageUrl(newNext);
 
-                // Animasi item baru
                 setTimeout(() => {
                     gsap.fromTo(
                         '.project-card-new',
@@ -205,9 +203,7 @@ export default function PortfolioIndex({
         }
     };
 
-    const handleContactSubmit = (e) => {
-        e.preventDefault();
-        // Asumsikan route 'contact.send' sudah dibuat di web.php
+    const handleContactSubmit = () => {
         post(route('contact.send'), {
             onSuccess: () => {
                 reset();
@@ -243,12 +239,27 @@ export default function PortfolioIndex({
                 </div>
             </div>
 
-            {/* BACKGROUND */}
-            <div className="pointer-events-none fixed inset-0 z-0">
+            {/* ANIMATED BACKGROUND - Aceternity UI */}
+            <BackgroundGradientAnimation
+                gradientBackgroundStart="rgb(2, 6, 23)"
+                gradientBackgroundEnd="rgb(15, 23, 42)"
+                firstColor="6, 182, 212"
+                secondColor="99, 102, 241"
+                thirdColor="168, 85, 247"
+                fourthColor="59, 130, 246"
+                fifthColor="236, 72, 153"
+                pointerColor="6, 182, 212"
+                size="80%"
+                blendingValue="hard-light"
+                interactive={true}
+                containerClassName="fixed inset-0 z-0"
+            />
+
+            {/* Overlay Layers untuk Depth */}
+            <div className="pointer-events-none fixed inset-0 z-[1]">
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
                 <div className="bg-grid-pattern absolute inset-0 opacity-[0.15]"></div>
-                <div className="absolute top-[-10%] right-[-10%] h-[600px] w-[600px] rounded-full bg-indigo-600/20 blur-[120px]"></div>
-                <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-cyan-600/20 blur-[100px]"></div>
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(2,6,23,0.4)_100%)]"></div>
             </div>
 
             {/* NAVBAR */}
@@ -429,9 +440,8 @@ export default function PortfolioIndex({
             </section>
 
             {/* CERTIFICATES */}
-            <section className="relative z-10 border-y border-white/5 bg-[#0a0f1e] py-32">
+            <section className="relative z-10 border-y border-white/5 bg-[#0a0f1e]/80 py-32 backdrop-blur-sm">
                 <div className="mx-auto max-w-7xl px-6">
-                    {/* Header Section */}
                     <div className="reveal-section mb-12 flex items-center gap-4">
                         <span className="font-mono text-sm tracking-widest text-indigo-500">
                             02 // CREDENTIALS
@@ -439,7 +449,6 @@ export default function PortfolioIndex({
                         <div className="h-[1px] flex-grow bg-slate-800"></div>
                     </div>
 
-                    {/* Grid Layout */}
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                         {certificates.map((cert) => (
                             <div
@@ -447,7 +456,6 @@ export default function PortfolioIndex({
                                 onClick={() => setPreviewCert(cert)}
                                 className="reveal-section group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-slate-900 transition-all duration-500 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_0_40px_rgba(99,102,241,0.25)]"
                             >
-                                {/* 1. LOGIC IMAGE BACKGROUND (Prioritas: cert.image -> Fallback) */}
                                 <div className="absolute inset-0 h-full w-full bg-slate-950">
                                     {cert.image ? (
                                         <img
@@ -456,22 +464,17 @@ export default function PortfolioIndex({
                                             className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100"
                                         />
                                     ) : (
-                                        // Fallback jika tidak ada gambar (Pattern Noise)
                                         <div className="h-full w-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
                                     )}
-
-                                    {/* Gradient Overlay: Agar teks terbaca di atas gambar */}
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/80 to-transparent transition-opacity duration-300 group-hover:via-[#020617]/60"></div>
                                 </div>
 
-                                {/* 2. CONTENT INFO (Overlay di atas gambar) */}
                                 <div className="absolute bottom-0 left-0 z-20 w-full p-6">
                                     <div className="mb-3 flex items-center justify-between">
-                                        {/* Badge Verified */}
                                         <div className="flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 backdrop-blur-md">
                                             <SafetyCertificateOutlined className="text-xs text-indigo-400" />
                                             <span className="font-mono text-[10px] tracking-wider text-indigo-300">
-                                                VERIFIED_ASSET
+                                                VERIFIED
                                             </span>
                                         </div>
                                     </div>
@@ -488,12 +491,44 @@ export default function PortfolioIndex({
                                             {cert.issued_date}
                                         </span>
                                     </div>
-                                </div>
 
-                                {/* 3. HOVER INTERACTION ICON (Eye Icon) */}
-                                <div className="absolute top-1/2 left-1/2 z-30 -translate-x-1/2 -translate-y-1/2 scale-50 transform opacity-0 transition-all duration-300 group-hover:scale-100 group-hover:opacity-100">
-                                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-xl backdrop-blur-sm">
-                                        <ReadOutlined className="text-2xl" />
+                                    {cert.credential_id && (
+                                        <div className="mt-2 flex items-center gap-1 rounded border border-white/5 bg-black/30 px-2 py-1.5 backdrop-blur-sm">
+                                            <span className="font-mono text-[9px] text-slate-500">
+                                                CREDENTIAL_ID:
+                                            </span>
+                                            <span className="font-mono text-[10px] font-semibold text-indigo-400">
+                                                {cert.credential_id}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-3 flex gap-2 border-t border-white/5 pt-3">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setPreviewCert(cert);
+                                            }}
+                                            className="flex flex-1 items-center justify-center gap-2 rounded border border-indigo-500/30 bg-indigo-500/5 px-3 py-2 font-mono text-xs text-indigo-300 backdrop-blur-sm transition-all hover:bg-indigo-500/20 hover:text-white"
+                                        >
+                                            <ReadOutlined />
+                                            <span>PREVIEW</span>
+                                        </button>
+
+                                        {cert.credential_url && (
+                                            <a
+                                                href={cert.credential_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) =>
+                                                    e.stopPropagation()
+                                                }
+                                                className="flex flex-1 items-center justify-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 font-mono text-xs text-cyan-300 backdrop-blur-sm transition-all hover:bg-cyan-500/20 hover:text-white"
+                                            >
+                                                <SafetyCertificateOutlined />
+                                                <span>VERIFY</span>
+                                            </a>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -502,7 +537,7 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* BLOGS SECTION (RESTORED) */}
+            {/* BLOGS SECTION */}
             <section id="insights" className="relative z-10 px-6 py-32">
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-16 flex items-end justify-between gap-4">
@@ -552,10 +587,10 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* CONTACT SECTION (FORM ADDED) */}
+            {/* CONTACT SECTION */}
             <section
                 id="contact"
-                className="relative z-10 border-t border-white/5 bg-[#020617] px-6 py-24"
+                className="relative z-10 border-t border-white/5 bg-[#020617]/80 px-6 py-24 backdrop-blur-sm"
             >
                 <div className="mx-auto max-w-4xl">
                     <div className="reveal-section mb-16 text-center">
@@ -571,10 +606,7 @@ export default function PortfolioIndex({
                         </p>
                     </div>
 
-                    <form
-                        onSubmit={handleContactSubmit}
-                        className="reveal-section space-y-8 rounded-2xl border border-white/5 bg-slate-900/30 p-8 backdrop-blur-sm md:p-12"
-                    >
+                    <div className="reveal-section space-y-8 rounded-2xl border border-white/5 bg-slate-900/30 p-8 backdrop-blur-sm md:p-12">
                         <div className="grid gap-8 md:grid-cols-2">
                             <div className="group">
                                 <label className="mb-2 ml-1 block font-mono text-xs text-cyan-500">
@@ -651,7 +683,7 @@ export default function PortfolioIndex({
 
                         <div className="text-right">
                             <button
-                                type="submit"
+                                onClick={handleContactSubmit}
                                 disabled={processing}
                                 className="group relative inline-flex items-center gap-3 rounded-sm bg-cyan-600 px-10 py-4 font-bold text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all hover:bg-cyan-500 disabled:opacity-50"
                             >
@@ -663,12 +695,12 @@ export default function PortfolioIndex({
                                 <span>TRANSMIT DATA</span>
                             </button>
                         </div>
-                    </form>
+                    </div>
                 </div>
             </section>
 
             {/* FOOTER */}
-            <footer className="border-t border-white/5 bg-[#020617] py-12 text-center">
+            <footer className="relative z-10 border-t border-white/5 bg-[#020617]/80 py-12 text-center backdrop-blur-sm">
                 <div className="mb-8 flex justify-center gap-6">
                     {[
                         <GithubOutlined />,
