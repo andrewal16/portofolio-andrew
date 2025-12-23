@@ -45,8 +45,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 // ============================================================================
 // PUBLIC ROUTES (untuk menampilkan blog ke visitor)
 // ============================================================================
-Route::post('/contact/send', [PortfolioController::class, 'sendMessage'])
-    ->name('contact.send');
+Route::post('/contact/send', [PortfolioController::class, 'sendMessage'])->name('contact.send');
+
 // Tampilkan detail project dengan blog posts-nya
 Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
     $project->load(['publishedBlogPosts' => function ($query) {

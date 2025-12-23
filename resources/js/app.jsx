@@ -6,6 +6,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { route } from 'ziggy-js';
 
+
 import '../css/app.css';
 import { initializeTheme } from './hooks/use-appearance';
 import { Ziggy } from './ziggy';

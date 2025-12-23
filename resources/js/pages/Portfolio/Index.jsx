@@ -11,7 +11,7 @@ import {
     ThunderboltOutlined,
     TwitterOutlined,
 } from '@ant-design/icons';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { Modal, message } from 'antd';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -28,6 +28,9 @@ export default function PortfolioIndex({
     certificates,
     recent_blogs,
 }) {
+    // --- GET FLASH MESSAGES FROM INERTIA ---
+    const { flash } = usePage().props;
+
     // --- State & Hooks ---
     const [isLoading, setIsLoading] = useState(true);
     const [previewCert, setPreviewCert] = useState(null);
@@ -50,6 +53,7 @@ export default function PortfolioIndex({
     const cursorRef = useRef(null);
     const textRef = useRef(null);
     const marqueeRef = useRef(null);
+    const contactSectionRef = useRef(null);
 
     // --- Data Static ---
     const roles = ['Web Developer', 'Data Scientist', 'Creative Coder'];
@@ -171,6 +175,18 @@ export default function PortfolioIndex({
         });
     }, []);
 
+    // --- AUTO SCROLL TO CONTACT AFTER SUCCESS ---
+    useEffect(() => {
+        if (flash?.success && contactSectionRef.current) {
+            setTimeout(() => {
+                contactSectionRef.current.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                });
+            }, 300);
+        }
+    }, [flash?.success]);
+
     // --- Handlers ---
     const handleLoadMore = async () => {
         if (!nextPageUrl) return;
@@ -198,6 +214,7 @@ export default function PortfolioIndex({
             }
         } catch (err) {
             console.error(err);
+            message.error('Failed to load more projects');
         } finally {
             setIsLoadingMore(false);
         }
@@ -207,10 +224,10 @@ export default function PortfolioIndex({
         post(route('contact.send'), {
             onSuccess: () => {
                 reset();
-                message.success('Transmission Sent Successfully!');
+                message.success('Message sent successfully!');
             },
             onError: () => {
-                message.error('Transmission Failed. Check inputs.');
+                message.error('Please check your inputs and try again.');
             },
         });
     };
@@ -226,9 +243,7 @@ export default function PortfolioIndex({
             <div className="splash-screen fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#020617]">
                 <div className="splash-content w-full max-w-md px-6 text-center">
                     <div className="mb-2 flex justify-between">
-                        <span className="font-mono text-cyan-500">
-                            SYSTEM_BOOT
-                        </span>
+                        <span className="font-mono text-cyan-500">Loading</span>
                         <span className="text-4xl font-bold text-white">
                             <span className="counter">0</span>%
                         </span>
@@ -239,7 +254,7 @@ export default function PortfolioIndex({
                 </div>
             </div>
 
-            {/* ANIMATED BACKGROUND - Aceternity UI */}
+            {/* ANIMATED BACKGROUND */}
             <BackgroundGradientAnimation
                 gradientBackgroundStart="rgb(2, 6, 23)"
                 gradientBackgroundEnd="rgb(15, 23, 42)"
@@ -255,7 +270,7 @@ export default function PortfolioIndex({
                 containerClassName="fixed inset-0 z-0"
             />
 
-            {/* Overlay Layers untuk Depth */}
+            {/* Overlay Layers */}
             <div className="pointer-events-none fixed inset-0 z-[1]">
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
                 <div className="bg-grid-pattern absolute inset-0 opacity-[0.15]"></div>
@@ -272,7 +287,7 @@ export default function PortfolioIndex({
                     href="#contact"
                     className="hidden rounded-full border border-cyan-500/50 px-6 py-2 font-mono text-sm text-cyan-400 transition-all hover:bg-cyan-500/10 md:block"
                 >
-                    INITIATE_CONTACT
+                    Contact
                 </a>
             </nav>
 
@@ -290,7 +305,7 @@ export default function PortfolioIndex({
                         <h1 className="hero-element text-5xl leading-tight font-bold text-white md:text-7xl">
                             Hi, I'm <br />
                             <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent">
-                                {profile.name}
+                                Andrew Alfonso Lie
                             </span>
                         </h1>
                         <div className="hero-element flex h-12 items-center text-2xl font-light text-slate-400 md:text-3xl">
@@ -359,8 +374,8 @@ export default function PortfolioIndex({
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-16 flex flex-col items-end justify-between gap-4 md:flex-row">
                         <div>
-                            <span className="mb-2 block font-mono text-sm tracking-widest text-cyan-500">
-                                01 // PORTFOLIO
+                            <span className="mb-4 block font-mono text-2xl font-bold tracking-widest text-cyan-500">
+                                01 / Portfolio
                             </span>
                             <h2 className="text-5xl font-bold text-white">
                                 Selected Works
@@ -429,7 +444,7 @@ export default function PortfolioIndex({
                                 {isLoadingMore ? (
                                     <LoadingOutlined className="animate-spin" />
                                 ) : (
-                                    <span>Load More Protocols</span>
+                                    <span>Load More Projects</span>
                                 )}
                                 <span className="absolute top-0 left-0 h-2 w-2 border-t border-l border-cyan-500"></span>
                                 <span className="absolute right-0 bottom-0 h-2 w-2 border-r border-b border-cyan-500"></span>
@@ -443,8 +458,8 @@ export default function PortfolioIndex({
             <section className="relative z-10 border-y border-white/5 bg-[#0a0f1e]/80 py-32 backdrop-blur-sm">
                 <div className="mx-auto max-w-7xl px-6">
                     <div className="reveal-section mb-12 flex items-center gap-4">
-                        <span className="font-mono text-sm tracking-widest text-indigo-500">
-                            02 // CREDENTIALS
+                        <span className="block font-mono text-2xl font-bold tracking-widest text-indigo-500">
+                            02 / Certifications
                         </span>
                         <div className="h-[1px] flex-grow bg-slate-800"></div>
                     </div>
@@ -495,7 +510,7 @@ export default function PortfolioIndex({
                                     {cert.credential_id && (
                                         <div className="mt-2 flex items-center gap-1 rounded border border-white/5 bg-black/30 px-2 py-1.5 backdrop-blur-sm">
                                             <span className="font-mono text-[9px] text-slate-500">
-                                                CREDENTIAL_ID:
+                                                ID:
                                             </span>
                                             <span className="font-mono text-[10px] font-semibold text-indigo-400">
                                                 {cert.credential_id}
@@ -512,7 +527,7 @@ export default function PortfolioIndex({
                                             className="flex flex-1 items-center justify-center gap-2 rounded border border-indigo-500/30 bg-indigo-500/5 px-3 py-2 font-mono text-xs text-indigo-300 backdrop-blur-sm transition-all hover:bg-indigo-500/20 hover:text-white"
                                         >
                                             <ReadOutlined />
-                                            <span>PREVIEW</span>
+                                            <span>View</span>
                                         </button>
 
                                         {cert.credential_url && (
@@ -526,7 +541,7 @@ export default function PortfolioIndex({
                                                 className="flex flex-1 items-center justify-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 font-mono text-xs text-cyan-300 backdrop-blur-sm transition-all hover:bg-cyan-500/20 hover:text-white"
                                             >
                                                 <SafetyCertificateOutlined />
-                                                <span>VERIFY</span>
+                                                <span>Verify</span>
                                             </a>
                                         )}
                                     </div>
@@ -542,11 +557,11 @@ export default function PortfolioIndex({
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-16 flex items-end justify-between gap-4">
                         <div>
-                            <span className="mb-2 block font-mono text-sm tracking-widest text-pink-500">
-                                03 // KNOWLEDGE BASE
+                            <span className="mb-2 block font-mono text-2xl font-bold tracking-widest text-pink-500">
+                                03 / Blog
                             </span>
                             <h2 className="text-5xl font-bold text-white">
-                                Latest Insights
+                                Recent Articles
                             </h2>
                         </div>
                         <div className="h-[1px] flex-grow bg-slate-800 md:mx-8"></div>
@@ -576,7 +591,7 @@ export default function PortfolioIndex({
                                     </p>
                                     <div className="mt-auto flex items-center text-sm font-bold text-white">
                                         <span className="border-b border-transparent transition-all group-hover:border-pink-500">
-                                            READ ARTICLE
+                                            Read Article
                                         </span>
                                         <ArrowRightOutlined className="ml-2 transform text-pink-500 transition-transform group-hover:translate-x-1" />
                                     </div>
@@ -590,27 +605,77 @@ export default function PortfolioIndex({
             {/* CONTACT SECTION */}
             <section
                 id="contact"
+                ref={contactSectionRef}
                 className="relative z-10 border-t border-white/5 bg-[#020617]/80 px-6 py-24 backdrop-blur-sm"
             >
                 <div className="mx-auto max-w-4xl">
                     <div className="reveal-section mb-16 text-center">
                         <span className="font-mono text-sm tracking-widest text-cyan-500">
-                            04 // TRANSMISSION
+                            04 / Contact
                         </span>
                         <h2 className="mt-4 text-4xl font-bold text-white md:text-5xl">
-                            Initialize Connection
+                            Let's Work Together
                         </h2>
                         <p className="mx-auto mt-4 max-w-xl text-slate-400">
-                            Have a project in mind? Send encrypted data directly
-                            to my terminal.
+                            Have a project in mind? Drop me a message and let's
+                            discuss how we can collaborate.
                         </p>
                     </div>
 
                     <div className="reveal-section space-y-8 rounded-2xl border border-white/5 bg-slate-900/30 p-8 backdrop-blur-sm md:p-12">
+                        {/* SUCCESS MESSAGE */}
+                        {flash?.success && (
+                            <div className="animate-fadeIn rounded-lg border border-green-500/30 bg-green-500/10 p-6 backdrop-blur-sm">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500/20">
+                                        <span className="text-2xl">✅</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="mb-1 font-bold text-green-400">
+                                            Message Sent Successfully
+                                        </p>
+                                        <p className="font-mono text-sm leading-relaxed text-green-300">
+                                            {flash.success}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ERROR MESSAGES */}
+                        {Object.keys(errors).length > 0 && (
+                            <div className="animate-shake rounded-lg border border-red-500/30 bg-red-500/10 p-6 backdrop-blur-sm">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20">
+                                        <span className="text-xl">⚠️</span>
+                                    </div>
+                                    <div className="flex-1 space-y-2">
+                                        <p className="font-bold text-red-400">
+                                            Submission Failed
+                                        </p>
+                                        <div className="space-y-1">
+                                            {Object.entries(errors).map(
+                                                ([key, error]) => (
+                                                    <p
+                                                        key={key}
+                                                        className="font-mono text-sm text-red-300"
+                                                    >
+                                                        • {error}
+                                                    </p>
+                                                ),
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* FORM */}
                         <div className="grid gap-8 md:grid-cols-2">
                             <div className="group">
-                                <label className="mb-2 ml-1 block font-mono text-xs text-cyan-500">
-                                    IDENTIFIER // NAME
+                                <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-m text-cyan-500">
+                                    Name
+                                    <span className="text-red-400">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -618,33 +683,35 @@ export default function PortfolioIndex({
                                     onChange={(e) =>
                                         setData('name', e.target.value)
                                     }
-                                    className="w-full border-b border-white/20 bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none"
+                                    className={`w-full border-b ${
+                                        errors.name
+                                            ? 'border-red-500 bg-red-500/5'
+                                            : 'border-white/20'
+                                    } bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
                                     placeholder="John Doe"
+                                    required
                                 />
-                                {errors.name && (
-                                    <div className="mt-1 text-xs text-red-500">
-                                        {errors.name}
-                                    </div>
-                                )}
                             </div>
                             <div className="group">
-                                <label className="mb-2 ml-1 block font-mono text-xs text-cyan-500">
-                                    FREQUENCY // PHONE
+                                <label className="mb-2 ml-1 block font-mono text-m text-cyan-500">
+                                    Phone
                                 </label>
                                 <input
-                                    type="text"
+                                    type="tel"
                                     value={data.phone}
                                     onChange={(e) =>
                                         setData('phone', e.target.value)
                                     }
                                     className="w-full border-b border-white/20 bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none"
-                                    placeholder="+62..."
+                                    placeholder="+62 812 3456 7890"
                                 />
                             </div>
                         </div>
+
                         <div className="group">
-                            <label className="mb-2 ml-1 block font-mono text-xs text-cyan-500">
-                                DIGITAL ADDRESS // EMAIL
+                            <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-m text-cyan-500">
+                                Email
+                                <span className="text-red-400">*</span>
                             </label>
                             <input
                                 type="email"
@@ -652,47 +719,70 @@ export default function PortfolioIndex({
                                 onChange={(e) =>
                                     setData('email', e.target.value)
                                 }
-                                className="w-full border-b border-white/20 bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none"
+                                className={`w-full border-b ${
+                                    errors.email
+                                        ? 'border-red-500 bg-red-500/5'
+                                        : 'border-white/20'
+                                } bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
                                 placeholder="john@example.com"
+                                required
                             />
-                            {errors.email && (
-                                <div className="mt-1 text-xs text-red-500">
-                                    {errors.email}
-                                </div>
-                            )}
                         </div>
+
                         <div className="group">
-                            <label className="mb-2 ml-1 block font-mono text-xs text-cyan-500">
-                                PAYLOAD // MESSAGE
+                            <label className="mb-2 ml-1 flex items-center justify-between">
+                                <div className="flex items-center gap-2 font-mono text-m text-cyan-500">
+                                    Message
+                                    <span className="text-red-400">*</span>
+                                </div>
+                                <span
+                                    className={`font-mono text-[10px] ${
+                                        data.message.length > 2000
+                                            ? 'text-red-400'
+                                            : 'text-slate-600'
+                                    }`}
+                                >
+                                    {data.message.length}/2000
+                                </span>
                             </label>
                             <textarea
-                                rows="4"
+                                rows="5"
                                 value={data.message}
                                 onChange={(e) =>
                                     setData('message', e.target.value)
                                 }
-                                className="w-full border-b border-white/20 bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none"
-                                placeholder="Describe your project parameters..."
+                                maxLength={2000}
+                                className={`w-full border-b ${
+                                    errors.message
+                                        ? 'border-red-500 bg-red-500/5'
+                                        : 'border-white/20'
+                                } bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
+                                placeholder="Tell me about your project..."
+                                required
                             />
-                            {errors.message && (
-                                <div className="mt-1 text-xs text-red-500">
-                                    {errors.message}
-                                </div>
-                            )}
                         </div>
 
-                        <div className="text-right">
+                        <div className="flex items-center justify-between border-t border-white/5 pt-6">
+                            <p className="font-mono text-xs text-slate-600">
+                                <span className="text-red-400">*</span> Required
+                                fields
+                            </p>
                             <button
                                 onClick={handleContactSubmit}
                                 disabled={processing}
-                                className="group relative inline-flex items-center gap-3 rounded-sm bg-cyan-600 px-10 py-4 font-bold text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all hover:bg-cyan-500 disabled:opacity-50"
+                                className="group relative inline-flex items-center gap-3 rounded-sm bg-cyan-600 px-10 py-4 font-bold text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all hover:bg-cyan-500 hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {processing ? (
-                                    <LoadingOutlined className="animate-spin" />
+                                    <>
+                                        <LoadingOutlined className="animate-spin" />
+                                        <span>Sending...</span>
+                                    </>
                                 ) : (
-                                    <SendOutlined />
+                                    <>
+                                        <SendOutlined />
+                                        <span>Send Message</span>
+                                    </>
                                 )}
-                                <span>TRANSMIT DATA</span>
                             </button>
                         </div>
                     </div>
@@ -703,26 +793,37 @@ export default function PortfolioIndex({
             <footer className="relative z-10 border-t border-white/5 bg-[#020617]/80 py-12 text-center backdrop-blur-sm">
                 <div className="mb-8 flex justify-center gap-6">
                     {[
-                        <GithubOutlined />,
-                        <LinkedinOutlined />,
-                        <TwitterOutlined />,
-                    ].map((icon, i) => (
+                        {
+                            icon: <GithubOutlined />,
+                            url: profile.social?.github,
+                        },
+                        {
+                            icon: <LinkedinOutlined />,
+                            url: profile.social?.linkedin,
+                        },
+                        {
+                            icon: <TwitterOutlined />,
+                            url: profile.social?.twitter,
+                        },
+                    ].map((social, i) => (
                         <a
                             key={i}
-                            href="#"
+                            href={social.url || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-2xl text-slate-500 transition-colors hover:text-cyan-400"
                         >
-                            {icon}
+                            {social.icon}
                         </a>
                     ))}
                 </div>
                 <div className="font-mono text-xs text-slate-600">
-                    &copy; {new Date().getFullYear()} {profile.name} // SYSTEM
-                    SECURE
+                    &copy; {new Date().getFullYear()} {profile.name}. All rights
+                    reserved.
                 </div>
             </footer>
 
-            {/* MODAL */}
+            {/* MODAL CERTIFICATE PREVIEW */}
             <Modal
                 open={!!previewCert}
                 onCancel={() => setPreviewCert(null)}
@@ -752,7 +853,7 @@ export default function PortfolioIndex({
                             <img
                                 src={previewCert.image}
                                 className="h-auto max-h-[70vh] w-full object-contain"
-                                alt="Cert"
+                                alt="Certificate"
                             />
                         </div>
                     </div>
