@@ -29,6 +29,7 @@ export default function PortfolioIndex({
     recent_blogs,
 }) {
     // --- GET FLASH MESSAGES FROM INERTIA ---
+    console.log("certificate", JSON.stringify(certificates, null, 2));
     const { flash } = usePage().props;
 
     // --- State & Hooks ---
