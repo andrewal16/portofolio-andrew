@@ -8,53 +8,36 @@ use App\Http\Controllers\TagController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
-use Laravel\Fortify\Features;
 
+// ============================================================================
+// 🏠 ROOT REDIRECT - Auto redirect ke /portfolio
+// ============================================================================
 Route::get('/', function () {
-    return Inertia::render('welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
+    return redirect('/portfolio');
 })->name('home');
 
 // ============================================================================
-// 🔐 ADMIN ROUTES - HARUS LOGIN DULU!
+// 🌐 PUBLIC PORTFOLIO ROUTES
 // ============================================================================
-Route::prefix('admin')
-    ->name('admin.')
-    ->middleware(['auth:sanctum', 'verified']) // ✅ WAJIB LOGIN
-    ->group(function () {
-        // Dashboard (optional)
-        Route::get('/dashboard', function () {
-            return redirect()->route('admin.project.index');
-        })->name('dashboard');
+Route::get('/portfolio', [PortfolioController::class, 'index'])
+    ->name('portfolio.index');
 
-        // Projects
-        Route::resource('project', ProjectController::class)->except(['show']);
+Route::get('/portfolio/project/{slug}', [PortfolioController::class, 'show'])
+    ->name('portfolio.project.show');
 
-        // Certificates
-        Route::resource('certificate', CertificateController::class)->except(['show']);
+Route::get('/portfolio/blog/{slug}', [PortfolioController::class, 'showBlog'])
+    ->name('portfolio.blog.show');
 
-        // Blog Posts (CRUD lengkap)
-        Route::resource('blog-posts', BlogPostController::class);
-
-        // Toggle publish status
-        Route::patch('blog-posts/{blog_post}/toggle-publish', [BlogPostController::class, 'togglePublish'])
-            ->name('blog-posts.toggle-publish');
-
-        // Tag management (API)
-        Route::prefix('tags')->name('tags.')->group(function () {
-            Route::get('/', [TagController::class, 'index'])->name('index');
-            Route::post('/', [TagController::class, 'store'])->name('store');
-            Route::delete('/{tag}', [TagController::class, 'destroy'])->name('destroy');
-        });
-    });
+// Redirect typo 'portofolio' ke 'portfolio'
+Route::get('/portofolio', function () {
+    return redirect('/portfolio', 301); // ✅ Permanent redirect
+});
 
 // ============================================================================
-// 🌐 PUBLIC ROUTES (untuk menampilkan blog ke visitor)
+// 🎯 PROJECT & BLOG PUBLIC ROUTES
 // ============================================================================
-Route::post('/contact/send', [PortfolioController::class, 'sendMessage'])->name('contact.send');
 
-// Tampilkan detail project dengan blog posts-nya
+// Project detail dengan blog posts
 Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
     $project->load(['publishedBlogPosts' => function ($query) {
         $query->select('id', 'project_id', 'title', 'slug', 'content', 'published_at')
@@ -84,9 +67,7 @@ Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
     ]);
 })->name('projects.show');
 
-Route::get('/portfolio/project/{slug}', [PortfolioController::class, 'show'])
-    ->name('portfolio.project.show');
-
+// Blog post detail
 Route::get('/projects/{project:slug}/blog/{blogPost:slug}', function (
     \App\Models\Project $project,
     \App\Models\BlogPost $blogPost
@@ -110,14 +91,51 @@ Route::get('/projects/{project:slug}/blog/{blogPost:slug}', function (
     ]);
 })->name('projects.blog-posts.show');
 
-Route::get('/portofolio', function () {
+// Contact form
+Route::post('/contact/send', [PortfolioController::class, 'sendMessage'])
+    ->name('contact.send');
+
+// ============================================================================
+// 🔐 ADMIN ROUTES - HARUS LOGIN DULU!
+// ============================================================================
+Route::prefix('admin')
+    ->name('admin.')
+    ->middleware(['auth:sanctum', 'verified'])
+    ->group(function () {
+        // Dashboard redirect ke project index
+        Route::get('/dashboard', function () {
+            return redirect()->route('admin.project.index');
+        })->name('dashboard');
+
+        // Projects CRUD
+        Route::resource('project', ProjectController::class)->except(['show']);
+
+        // Certificates CRUD
+        Route::resource('certificate', CertificateController::class)->except(['show']);
+
+        // Blog Posts CRUD
+        Route::resource('blog-posts', BlogPostController::class);
+
+        // Toggle publish status
+        Route::patch('blog-posts/{blog_post}/toggle-publish', [BlogPostController::class, 'togglePublish'])
+            ->name('blog-posts.toggle-publish');
+
+        // Tag management
+        Route::prefix('tags')->name('tags.')->group(function () {
+            Route::get('/', [TagController::class, 'index'])->name('index');
+            Route::post('/', [TagController::class, 'store'])->name('store');
+            Route::delete('/{tag}', [TagController::class, 'destroy'])->name('destroy');
+        });
+    });
+
+// ============================================================================
+// 🔧 SETTINGS & AUTH ROUTES
+// ============================================================================
+require __DIR__.'/settings.php';
+
+// ============================================================================
+// 🚨 FALLBACK - Redirect semua route yang tidak ada ke /portfolio
+// ============================================================================
+Route::fallback(function () {
     return redirect('/portfolio');
 });
-
-Route::get('/portfolio', [PortfolioController::class, 'index'])
-    ->name('portfolio.index');
-
-Route::get('/portfolio/blog/{slug}', [PortfolioController::class, 'showBlog'])
-    ->name('portfolio.blog.show');
-
-require __DIR__.'/settings.php';
