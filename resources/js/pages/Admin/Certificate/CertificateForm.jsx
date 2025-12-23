@@ -88,6 +88,11 @@ function CertificateForm() {
             message.error('Ada kesalahan dalam form! Cek lagi ya.');
         }
     }, [errors, form]);
+    useEffect(() => {
+        if (availableTags) {
+            setTags(availableTags);
+        }
+    }, [availableTags]);
 
     const handleImageChange = (info) => {
         if (info.file.status === 'removed') {
@@ -145,36 +150,67 @@ function CertificateForm() {
             const values = await newTagForm.validateFields();
             setCreatingTag(true);
 
-            const response = await fetch(route('admin.tags.store'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector(
-                        'meta[name="csrf-token"]',
-                    ).content,
-                },
-                body: JSON.stringify({
+            router.post(
+                route('admin.tags.store'),
+                {
                     name: values.name,
                     color: newTagColor,
-                }),
+                },
+                {
+                    preserveScroll: true,
+                    preserveState: true, // Form utama tidak akan kereset
+
+                    // ✅ FIX: Minta Inertia update 'availableTags' & 'flash' saja
+                    // Hapus 'only: []' yang memblokir update
+                    only: ['availableTags', 'flash'],
+
+                    onSuccess: (page) => {
+                        // Tidak perlu fetchTags() manual!
+                        // Karena 'only' di atas sudah meminta data terbaru,
+                        // dan useEffect akan menangkap perubahannya.
+
+                        // message.success('Tag berhasil dibuat!');
+                        setIsModalVisible(false);
+                        newTagForm.resetFields();
+
+                        // (Opsional) Auto-select tag yang baru dibuat
+                        // Logic: Cari tag yang namanya sama dengan yang baru diinput
+                        const newTag = page.props.availableTags.find(
+                            (t) => t.label === values.name,
+                        );
+                        if (newTag) {
+                            setSelectedTags((prev) => [...prev, newTag.value]);
+                        }
+                    },
+
+                    onError: (errors) => {
+                        const errorMessages = Object.values(errors).flat();
+                        message.error(errorMessages[0] || 'Gagal membuat tag!');
+                    },
+
+                    onFinish: () => {
+                        setCreatingTag(false);
+                    },
+                },
+            );
+        } catch (error) {
+            console.error(error);
+            // message.error('Lengkapi form dengan benar!'); // Antd validateFields sudah handle visual error
+            setCreatingTag(false);
+        }
+    };
+
+    const fetchTags = async () => {
+        try {
+            const response = await fetch(route('admin.tags.index'), {
+                headers: { Accept: 'application/json' },
             });
-
             const data = await response.json();
-
             if (data.success) {
-                const newTag = data.data;
-                setTags([...tags, newTag]);
-                setSelectedTags([...selectedTags, newTag.value]);
-                form.setFieldValue('tags', [...selectedTags, newTag.value]);
-                message.success('Tag berhasil dibuat!');
-                setIsModalVisible(false);
-            } else {
-                message.error('Gagal membuat tag!');
+                setTags(data.data);
             }
         } catch (error) {
-            message.error('Gagal membuat tag!');
-        } finally {
-            setCreatingTag(false);
+            console.error('Fetch tags error:', error);
         }
     };
 

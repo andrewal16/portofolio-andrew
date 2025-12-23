@@ -19,7 +19,6 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
     const [form] = Form.useForm();
     const editorRef = useRef(null);
 
-    // ✅ FIX: Inertia useForm dengan proper handling
     const { data, setData, post, put, processing, errors, wasSuccessful } =
         useForm({
             project_id: blogPost?.project_id || undefined,
@@ -29,52 +28,57 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
             is_published: blogPost?.is_published || false,
         });
 
-    // ✅ FIX: Handle success SETELAH processing selesai
+    // Handle success redirect
     useEffect(() => {
         if (wasSuccessful) {
-            if (typeForm === 'create') {
-                message.success('Blog post berhasil dibuat!');
-            } else {
-                message.success('Blog post berhasil diupdate!');
-            }
-            // Redirect setelah message muncul
+            const successMsg =
+                typeForm === 'create'
+                    ? 'Blog post berhasil dibuat!'
+                    : 'Blog post berhasil diupdate!';
+
+            message.success(successMsg);
+
             setTimeout(() => {
                 router.visit(route('admin.blog-posts.index'));
             }, 500);
         }
-    }, [wasSuccessful]);
+    }, [wasSuccessful, typeForm]);
 
     const handleSubmit = (values) => {
-        // Ambil konten dari TinyMCE
-        if (editorRef.current) {
-            const content = editorRef.current.getContent();
-            setData('content', content); // Update data content
-        }
-
+        // ✅ Ambil content dari TinyMCE
+        const editorContent = editorRef.current
+            ? editorRef.current.getContent()
+            : data.content;
+    
+        // ✅ UPDATE state dulu SEBELUM submit
+        setData('content', editorContent);
+    
+        // ✅ CARA 1: Pakai useForm's method (RECOMMENDED)
+        const options = {
+            preserveScroll: true,
+            // ⚠️ IMPORTANT: data sudah include editorContent setelah setData di atas
+            data: {
+                ...data,
+                content: editorContent, // Pastikan content terupdate
+            },
+            onError: (errors) => {
+                console.error('Validation Errors:', errors);
+                message.error('Gagal menyimpan. Periksa form kembali.');
+            },
+            onSuccess: () => {
+                console.log('✅ Save successful!');
+            },
+        };
+    
         if (typeForm === 'create') {
-            post(route('admin.blog-posts.store'), {
-                preserveScroll: true, // Jaga posisi scroll
-                onError: () => {
-                    message.error(
-                        'Gagal membuat blog post. Periksa form kembali.',
-                    );
-                },
-            });
+            post(route('admin.blog-posts.store'), options);
         } else {
-            put(route('admin.blog-posts.update', blogPost.slug), {
-                preserveScroll: true,
-                onError: () => {
-                    message.error(
-                        'Gagal update blog post. Periksa form kembali.',
-                    );
-                },
-            });
+            put(route('admin.blog-posts.update', blogPost.slug), options);
         }
     };
 
     return (
         <AppLayout>
-            {/* ✅ IMPROVED: Loading Overlay saat processing */}
             <Spin spinning={processing} tip="Menyimpan data..." size="large">
                 <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
                     <Card
@@ -83,19 +87,12 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                 ? '📝 Buat Blog Post Baru'
                                 : '✏️ Edit Blog Post'
                         }
-                        // ✅ PROFESSIONAL: Add shadow & border
-                        // style={{
-                        //     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                        //     borderRadius: '8px',
-                        // }}
                     >
                         <Form
                             form={form}
                             layout="vertical"
                             onFinish={handleSubmit}
                             initialValues={data}
-                            // ✅ PROFESSIONAL: Better spacing
-                            style={{ maxWidth: '100%' }}
                         >
                             {/* Project Selection */}
                             <Form.Item
@@ -160,7 +157,7 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                 />
                             </Form.Item>
 
-                            {/* Slug (Optional) */}
+                            {/* Slug */}
                             <Form.Item
                                 label={
                                     <span style={{ fontWeight: 600 }}>
@@ -190,7 +187,7 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                 />
                             </Form.Item>
 
-                            {/* TinyMCE Editor - ✅ FIX: Proper height & overflow */}
+                            {/* ✅ FIX 4: TinyMCE dengan plugin minimal */}
                             <Form.Item
                                 label={
                                     <span style={{ fontWeight: 600 }}>
@@ -199,7 +196,6 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                 }
                                 validateStatus={errors.content ? 'error' : ''}
                                 help={errors.content}
-                                // ✅ FIX: Prevent overflow
                                 style={{ marginBottom: '24px' }}
                             >
                                 <div
@@ -211,7 +207,9 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                 >
                                     <Editor
                                         apiKey={
-                                            import.meta.env.VITE_TINYMCE_API_KEY
+                                            import.meta.env
+                                                .VITE_TINYMCE_API_KEY ||
+                                            'no-api-key'
                                         }
                                         onInit={(evt, editor) =>
                                             (editorRef.current = editor)
@@ -221,33 +219,34 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                         init={{
                                             height: 500,
                                             menubar: true,
+
+                                            // ✅ PLUGIN MINIMAL - Hindari 404
                                             plugins: [
-                                                'advlist',
-                                                'autolink',
                                                 'lists',
                                                 'link',
-                                                'image',
-                                                'charmap',
-                                                'anchor',
-                                                'searchreplace',
-                                                'visualblocks',
                                                 'code',
-                                                'fullscreen',
-                                                'insertdatetime',
-                                                'media',
                                                 'table',
-                                                'preview',
-                                                'help',
-                                                'wordcount',
+                                                'searchreplace',
+                                                'fullscreen',
                                             ],
+
                                             toolbar:
                                                 'undo redo | blocks | bold italic forecolor | ' +
                                                 'alignleft aligncenter alignright alignjustify | ' +
-                                                'bullist numlist outdent indent | removeformat | help',
+                                                'bullist numlist | link | code | fullscreen',
+
                                             content_style:
                                                 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px }',
-                                            // ✅ FIX: Prevent editor overflow
                                             resize: false,
+
+                                            // ✅ Tambahan: Better error handling
+                                            setup: (editor) => {
+                                                editor.on('init', () => {
+                                                    console.log(
+                                                        '✅ TinyMCE loaded successfully',
+                                                    );
+                                                });
+                                            },
                                         }}
                                     />
                                 </div>
@@ -273,7 +272,7 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                 />
                             </Form.Item>
 
-                            {/* ✅ PROFESSIONAL: Action Buttons dengan styling lebih baik */}
+                            {/* Action Buttons */}
                             <Form.Item
                                 style={{ marginTop: '32px', marginBottom: 0 }}
                             >
@@ -282,9 +281,7 @@ export default function BlogPostForm({ typeForm, blogPost, projects }) {
                                         type="primary"
                                         htmlType="submit"
                                         loading={processing}
-                                        style={{
-                                            minWidth: '150px',
-                                        }}
+                                        style={{ minWidth: '150px' }}
                                     >
                                         {typeForm === 'create'
                                             ? 'Buat Blog Post'

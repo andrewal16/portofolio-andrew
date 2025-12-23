@@ -82,9 +82,9 @@ class UpdateCertificateRequest extends FormRequest
                                 $width = $dimensions[0];
                                 $height = $dimensions[1];
 
-                                if ($width < 800 && $height < 800) {
-                                    $fail('Gambar minimal 800px untuk salah satu sisinya');
-                                }
+                                // if ($width < 800 && $height < 800) {
+                                //     $fail('Gambar minimal 800px untuk salah satu sisinya');
+                                // }
                             }
                         } catch (\Exception $e) {
                             // Skip

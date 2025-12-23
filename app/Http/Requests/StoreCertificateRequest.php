@@ -83,9 +83,9 @@ class StoreCertificateRequest extends FormRequest
                                 $height = $dimensions[1];
 
                                 // Minimal 800px untuk salah satu sisi
-                                if ($width < 800 && $height < 800) {
-                                    $fail('Gambar minimal 800px untuk salah satu sisinya');
-                                }
+                                // if ($width < 800 && $height < 800) {
+                                //     $fail('Gambar minimal 800px untuk salah satu sisinya');
+                                // }
                             }
                         } catch (\Exception $e) {
                             // Skip validation kalau gagal baca dimensi

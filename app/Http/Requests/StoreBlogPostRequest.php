@@ -18,16 +18,19 @@ class StoreBlogPostRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      */
-    public function rules(): array
-    {
-        return [
-            'project_id' => ['required', 'exists:projects,id'],
-            'title' => ['required', 'string', 'max:255'],
-            'slug' => ['nullable', 'string', 'max:255', 'unique:blog_posts,slug'],
-            'content' => ['required', 'string'],
-            'is_published' => ['boolean'],
-        ];
-    }
+   // StoreBlogPostRequest.php & UpdateBlogPostRequest.php
+public function rules(): array
+{
+    return [
+        'project_id' => ['required', 'exists:projects,id'],
+        'title' => ['required', 'string', 'max:255'],
+        'slug' => ['nullable', 'string', 'max:255', 'unique:blog_posts,slug'],
+        'excerpt' => ['nullable', 'string', 'max:500'], // ✅ TAMBAHKAN
+        'content' => ['required', 'string'],
+        'is_published' => ['boolean'],
+        // published_at di-handle otomatis oleh Model boot events
+    ];
+}
 
     /**
      * Custom error messages

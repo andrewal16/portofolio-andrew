@@ -1,119 +1,175 @@
-// import InputError from '@/components/input-error';
-// import TextLink from '@/components/text-link';
-// import { Button } from '@/components/ui/button';
-// import { Checkbox } from '@/components/ui/checkbox';
-// import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label';
-// import { Spinner } from '@/components/ui/spinner';
-// import AuthLayout from '@/layouts/auth-layout';
-// import { register } from '@/routes';
-// // import { register } from '@/routes';
-// import { store } from '@/routes/login';
-// import { request } from '@/routes/password';
-// import { Form, Head } from '@inertiajs/react';
-// import PropTypes from 'prop-types'; // Optional: Best practice untuk JS
+import { LockOutlined, MailOutlined } from '@ant-design/icons';
+import { router, usePage } from '@inertiajs/react';
+import {
+    Alert,
+    Button,
+    Card,
+    Checkbox,
+    Form,
+    Input,
+    message,
+    Typography,
+} from 'antd';
+import React, { useEffect } from 'react';
+import { route } from 'ziggy-js';
 
-// export default function Login({ status, canResetPassword, canRegister }) {
-//     return (
-//         <AuthLayout
-//             title="Log in to your account"
-//             description="Enter your email and password below to log in"
-//         >
-//             <Head title="Log in" />
+const { Title, Text } = Typography;
 
-//             <Form
-//                 {...store.form()}
-//                 resetOnSuccess={['password']}
-//                 className="flex flex-col gap-6"
-//             >
-//                 {({ processing, errors }) => (
-//                     <>
-//                         <div className="grid gap-6">
-//                             <div className="grid gap-2">
-//                                 <Label htmlFor="email">Email address</Label>
-//                                 <Input
-//                                     id="email"
-//                                     type="email"
-//                                     name="email"
-//                                     required
-//                                     autoFocus
-//                                     tabIndex={1}
-//                                     autoComplete="email"
-//                                     placeholder="email@example.com"
-//                                 />
-//                                 <InputError message={errors.email} />
-//                             </div>
+function Login() {
+    const [form] = Form.useForm();
+    const { errors, flash, status } = usePage().props;
+    // const [isLoading, setIsLoading] = React.useState(false);
 
-//                             <div className="grid gap-2">
-//                                 <div className="flex items-center">
-//                                     <Label htmlFor="password">Password</Label>
-//                                     {canResetPassword && (
-//                                         <TextLink
-//                                             href={request()}
-//                                             className="ml-auto text-sm"
-//                                             tabIndex={5}
-//                                         >
-//                                             Forgot password?
-//                                         </TextLink>
-//                                     )}
-//                                 </div>
-//                                 <Input
-//                                     id="password"
-//                                     type="password"
-//                                     name="password"
-//                                     required
-//                                     tabIndex={2}
-//                                     autoComplete="current-password"
-//                                     placeholder="Password"
-//                                 />
-//                                 <InputError message={errors.password} />
-//                             </div>
+    // ✅ Handle Flash Messages (success, error, info)
+    useEffect(() => {
+        if (flash?.success) {
+            message.success(flash.success);
+        }
+        if (flash?.error) {
+            message.error(flash.error);
+        }
+        if (flash?.info) {
+            message.info(flash.info);
+        }
+    }, [flash]);
 
-//                             <div className="flex items-center space-x-3">
-//                                 <Checkbox
-//                                     id="remember"
-//                                     name="remember"
-//                                     tabIndex={3}
-//                                 />
-//                                 <Label htmlFor="remember">Remember me</Label>
-//                             </div>
+    // ✅ Handle Laravel validation errors
+    useEffect(() => {
+        if (errors && Object.keys(errors).length > 0) {
+            message.error('Email atau password salah');
 
-//                             <Button
-//                                 type="submit"
-//                                 className="mt-4 w-full"
-//                                 tabIndex={4}
-//                                 disabled={processing}
-//                                 data-test="login-button"
-//                             >
-//                                 {processing && <Spinner />}
-//                                 Log in
-//                             </Button>
-//                         </div>
+            // Set errors ke form Ant Design
+            const formErrors = Object.keys(errors).map((key) => ({
+                name: key,
+                errors: [errors[key]],
+            }));
+            form.setFields(formErrors);
+        }
+    }, [errors, form]);
 
-//                         {canRegister && (
-//                             <div className="text-center text-sm text-muted-foreground">
-//                                 Don't have an account?{' '}
-//                                 <TextLink href={register()} tabIndex={5}>
-//                                     Sign up
-//                                 </TextLink>
-//                             </div>
-//                         )}
-//                     </>
-//                 )}
-//             </Form>
+    const [isLoading, setIsLoading] = React.useState(false);
 
-//             {status && (
-//                 <div className="mb-4 text-center text-sm font-medium text-green-600">
-//                     {status}
-//                 </div>
-//             )}
-//         </AuthLayout>
-//     );
-// }
+    const handleSubmit = (values) => {
+        setIsLoading(true);
 
-// // Validasi props (Pengganti Interface TypeScript)
-// Login.propTypes = {
-//     status: PropTypes.string,
-//     canResetPassword: PropTypes.bool,
-//     canRegister: PropTypes.bool,
-// };
+        // ✅ Inertia way: POST langsung tanpa axios
+        router.post(route('login'), values, {
+            preserveScroll: true,
+            onSuccess: () => {
+                message.success('Login berhasil!');
+                // Fortify akan auto-redirect ke admin dashboard
+            },
+            onError: () => {
+                message.error(
+                    'Login gagal, periksa kembali email dan password Anda',
+                );
+            },
+            onFinish: () => {
+                setIsLoading(false);
+            },
+        });
+    };
+
+    return (
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+            <Card className="w-full max-w-md shadow-2xl" bordered={false}>
+                {/* Header */}
+                <div className="mb-8 text-center">
+                    <div className="mb-4 flex justify-center">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-500">
+                            <LockOutlined className="text-3xl text-white" />
+                        </div>
+                    </div>
+                    <Title level={2} className="!mb-2">
+                        Admin Login
+                    </Title>
+                    <Text type="secondary">
+                        Masukkan kredensial Anda untuk melanjutkan
+                    </Text>
+                </div>
+
+                {/* Form */}
+                <Form
+                    form={form}
+                    name="login"
+                    onFinish={handleSubmit}
+                    layout="vertical"
+                    size="large"
+                    requiredMark={false}
+                >
+                    {/* ✅ Session Status (e.g., "Password reset successful") */}
+                    {status && (
+                        <Alert
+                            message={status}
+                            type="success"
+                            showIcon
+                            closable
+                            style={{ marginBottom: 24 }}
+                        />
+                    )}
+                    {/* Email */}
+                    <Form.Item
+                        name="email"
+                        label="Email"
+                        rules={[
+                            { required: true, message: 'Email wajib diisi' },
+                            {
+                                type: 'email',
+                                message: 'Format email tidak valid',
+                            },
+                        ]}
+                    >
+                        <Input
+                            prefix={<MailOutlined className="text-gray-400" />}
+                            placeholder="admin@example.com"
+                            autoComplete="email"
+                        />
+                    </Form.Item>
+
+                    {/* Password */}
+                    <Form.Item
+                        name="password"
+                        label="Password"
+                        rules={[
+                            { required: true, message: 'Password wajib diisi' },
+                        ]}
+                    >
+                        <Input.Password
+                            prefix={<LockOutlined className="text-gray-400" />}
+                            placeholder="••••••••"
+                            autoComplete="current-password"
+                        />
+                    </Form.Item>
+
+                    {/* Remember Me */}
+                    <Form.Item name="remember" valuePropName="checked">
+                        <Checkbox>Ingat saya</Checkbox>
+                    </Form.Item>
+
+                    {/* Submit Button */}
+                    <Form.Item>
+                        <Button
+                            type="primary"
+                            htmlType="submit"
+                            loading={isLoading}
+                            block
+                            size="large"
+                            className="!h-12 !text-base font-semibold"
+                        >
+                            {isLoading ? 'Memproses...' : 'Login'}
+                        </Button>
+                    </Form.Item>
+                </Form>
+
+                {/* Footer */}
+                <div className="mt-6 text-center">
+                    <Text type="secondary" className="text-sm">
+                        © 2024 Portfolio Admin. All rights reserved.
+                    </Text>
+                </div>
+            </Card>
+        </div>
+    );
+}
+
+export default Login;

@@ -72,6 +72,10 @@ class Tag extends Model
                     $tag->slug = "{$originalSlug}-{$count}";
                     $count++;
                 }
+                
+            }
+            if (empty($tag->color)) {
+                $tag->color = '#1890ff'; // atau random
             }
         });
     }

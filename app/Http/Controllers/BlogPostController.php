@@ -21,7 +21,7 @@ class BlogPostController extends Controller
         $blogPosts = BlogPost::with('project:id,title,slug')
             ->latest()
             ->paginate(10)
-            ->through(fn($post) => [
+            ->through(fn ($post) => [
                 'id' => $post->id,
                 'title' => $post->title,
                 'slug' => $post->slug,
@@ -49,7 +49,7 @@ class BlogPostController extends Controller
         $projects = Project::select('id', 'title', 'slug')
             ->orderBy('title')
             ->get()
-            ->map(fn($project) => [
+            ->map(fn ($project) => [
                 'value' => $project->id,
                 'label' => $project->title,
             ]);
@@ -68,8 +68,11 @@ class BlogPostController extends Controller
     {
         $blogPost = BlogPost::create($request->validated());
 
+        // ✅ Refresh untuk pastikan slug sudah ter-generate
+        $blogPost->refresh();
+
         return redirect()
-            ->route('admin.blog-posts.edit', $blogPost)
+            ->route('admin.blog-posts.index') // Lebih aman redirect ke index
             ->with('success', 'Blog post berhasil dibuat!');
     }
 
@@ -109,7 +112,7 @@ class BlogPostController extends Controller
         $projects = Project::select('id', 'title', 'slug')
             ->orderBy('title')
             ->get()
-            ->map(fn($project) => [
+            ->map(fn ($project) => [
                 'value' => $project->id,
                 'label' => $project->title,
             ]);
@@ -164,7 +167,7 @@ class BlogPostController extends Controller
     public function togglePublish(BlogPost $blogPost): RedirectResponse
     {
         $blogPost->update([
-            'is_published' => !$blogPost->is_published,
+            'is_published' => ! $blogPost->is_published,
         ]);
 
         $status = $blogPost->is_published ? 'dipublish' : 'di-unpublish';

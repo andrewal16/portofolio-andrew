@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\LoginResponse;
+use Laravel\Fortify\Contracts\LogoutResponse;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
@@ -20,7 +22,27 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // ✅ Custom Login Response (redirect ke admin dashboard)
+        $this->app->instance(LoginResponse::class, new class implements LoginResponse
+        {
+            public function toResponse($request)
+            {
+                return $request->wantsJson()
+                    ? response()->json(['two_factor' => false])
+                    : redirect()->intended(route('admin.project.index')); // ✅ Redirect ke admin
+            }
+        });
+
+        // ✅ Custom Logout Response (redirect ke login page)
+        $this->app->instance(LogoutResponse::class, new class implements LogoutResponse
+        {
+            public function toResponse($request)
+            {
+                return $request->wantsJson()
+                    ? response()->json([], 204)
+                    : redirect()->route('login'); // ✅ Redirect ke login
+            }
+        });
     }
 
     /**
@@ -47,29 +69,36 @@ class FortifyServiceProvider extends ServiceProvider
      */
     private function configureViews(): void
     {
+        // ✅ Login Page
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
             'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'canRegister' => Features::enabled(Features::registration()),
             'status' => $request->session()->get('status'),
         ]));
 
+        // ✅ Reset Password Page
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
             'email' => $request->email,
             'token' => $request->route('token'),
         ]));
 
+        // ✅ Forgot Password Page
         Fortify::requestPasswordResetLinkView(fn (Request $request) => Inertia::render('auth/forgot-password', [
             'status' => $request->session()->get('status'),
         ]));
 
+        // ✅ Verify Email Page
         Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/verify-email', [
             'status' => $request->session()->get('status'),
         ]));
 
+        // ✅ Register Page (jika diaktifkan di config/fortify.php)
         Fortify::registerView(fn () => Inertia::render('auth/register'));
 
+        // ✅ Two Factor Challenge Page
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
 
+        // ✅ Confirm Password Page
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
     }
 

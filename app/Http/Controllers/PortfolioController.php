@@ -44,21 +44,29 @@ class PortfolioController extends Controller
             // ==========================================
             // 2. CERTIFICATES (✅ OPTIMIZED: Pakai Cache 24 jam)
             // ==========================================
-            'certificates' => Cache::remember('certificates:all', now()->addDay(), function () {
-                return Certificate::latest('issued_at')
-                    ->get()
-                    ->map(function ($cert) {
-                        return [
-                            'id' => $cert->id,
-                            'title' => $cert->title ?? $cert->name,
-                            'issuer' => $cert->issuer,
-                            'issued_date' => $cert->issued_at?->format('M Y') ?? '-',
-                            'image' => $cert->image_full_url,
-                            'credential_id' => $cert->credential_id,
-                            'credential_url' => $cert->credential_url,
-                        ];
-                    });
-            }),
+            'certificates' => Certificate::with('tags') // Tetap pakai Eager Loading
+                ->latest('issued_at')
+                ->get()
+                ->map(function ($cert) {
+                    return [
+                        'id' => $cert->id,
+                        'title' => $cert->title ?? $cert->name,
+                        'issuer' => $cert->issuer,
+                        'issued_date' => $cert->issued_at?->format('M Y') ?? '-',
+                        'image' => $cert->image_full_url,
+                        'credential_id' => $cert->credential_id,
+                        'credential_url' => $cert->credential_url,
+
+                        // Mapping Tags
+                        'tags' => $cert->tags->map(function ($tag) {
+                            return [
+                                'id' => $tag->id,
+                                'name' => $tag->name,
+                                'color' => $tag->color ?? '#6366f1',
+                            ];
+                        }),
+                    ];
+                }),
 
             // ==========================================
             // 3. BLOGS (✅ OPTIMIZED: Pakai scope)
