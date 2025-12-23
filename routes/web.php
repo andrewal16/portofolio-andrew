@@ -25,7 +25,7 @@ Route::prefix('admin')
     ->group(function () {
         // Dashboard (optional)
         Route::get('/dashboard', function () {
-            return Inertia::render('Admin/Dashboard');
+            return redirect()->route('admin.project.index');
         })->name('dashboard');
 
         // Projects
