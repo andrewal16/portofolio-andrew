@@ -2,421 +2,272 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\StoreProjectRequest;
-use App\Http\Requests\UpdateProjectRequest;
+use App\Mail\ContactFormMail;
+use App\Models\BlogPost;
+use App\Models\Certificate;
+use App\Models\Contact;
 use App\Models\Project;
-use Cloudinary\Cloudinary as CloudinarySDK;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
+use Inertia\Response;
 
-class ProjectController extends Controller
+class PortfolioController extends Controller
 {
-    /**
-     * Folder di Cloudinary untuk menyimpan project thumbnails
-     */
-    private const CLOUDINARY_FOLDER = 'projects';
-
-    /**
-     * Display a listing of projects.
-     */
-    public function index()
+    public function index(): Response
     {
-        $projects = Project::latest()
-            ->paginate(10)
-            ->through(fn($project) => [
-                'id' => $project->id,
-                'title' => $project->title,
-                'slug' => $project->slug,
-                'excerpt' => $project->excerpt,
-                'thumbnail_url' => $project->thumbnail_full_url,
-                'demo_url' => $project->demo_url,
-                'repo_url' => $project->repo_url,
-                'started_at' => $project->started_at?->format('Y-m-d'),
-                'finished_at' => $project->finished_at?->format('Y-m-d'),
-                'status' => $project->status,
-                'type' => $project->type,
-                'technologies' => $project->technologies,
-                'created_at' => $project->created_at?->format('Y-m-d H:i:s'),
-                'updated_at' => $project->updated_at?->format('Y-m-d H:i:s'),
-            ]);
+        $data = [
+            // ==========================================
+            // 1. PROJECTS (✅ OPTIMIZED: Hapus unused eager loading)
+            // ==========================================
+            'projects' => Project::whereIn('status', ['completed', 'ongoing'])
+                ->latest('started_at')
+                ->paginate(6)
+                ->through(function ($project) {
+                    return [
+                        'id' => $project->id,
+                        'title' => $project->title,
+                        'slug' => $project->slug,
+                        'description' => $project->excerpt,
+                        'image' => $project->thumbnail_full_url,
+                        'technologies' => $project->technologies,
+                        'demo_url' => $project->demo_url,
+                        'github_url' => $project->repo_url,
+                        'type' => $project->type,
+                        'created_at' => $project->created_at->format('M Y'),
+                    ];
+                }),
 
-        return Inertia::render('Admin/Project/Index', [
-            'projects' => $projects,
-        ]);
+            // ==========================================
+            // 2. CERTIFICATES (✅ OPTIMIZED: Pakai Cache 24 jam)
+            // ==========================================
+            'certificates' => Certificate::with('tags') // Tetap pakai Eager Loading
+                ->latest('issued_at')
+                ->get()
+                ->map(function ($cert) {
+                    return [
+                        'id' => $cert->id,
+                        'title' => $cert->title ?? $cert->name,
+                        'issuer' => $cert->issuer,
+                        'issued_date' => $cert->issued_at?->format('M Y') ?? '-',
+                        'image' => $cert->image_full_url,
+                        'credential_id' => $cert->credential_id,
+                        'credential_url' => $cert->credential_url,
+
+                        // Mapping Tags
+                        'tags' => $cert->tags->map(function ($tag) {
+                            return [
+                                'id' => $tag->id,
+                                'name' => $tag->name,
+                                'color' => $tag->color ?? '#6366f1',
+                            ];
+                        }),
+                    ];
+                }),
+
+            // ==========================================
+            // 3. BLOGS (✅ OPTIMIZED: Pakai scope)
+            // ==========================================
+            'recent_blogs' => BlogPost::withProjectData()
+                ->published()
+                ->latest()
+                ->limit(3)
+                ->get()
+                ->map(function ($blog) {
+                    return [
+                        'id' => $blog->id,
+                        'title' => $blog->title,
+                        'excerpt' => $blog->excerpt,
+                        'slug' => $blog->slug,
+                        'project' => $blog->project,
+                        'published_at' => $blog->published_at?->diffForHumans() ?? '-',
+                        'read_time' => ($blog->read_time ?? 5).' min read',
+                    ];
+                }),
+
+            // ==========================================
+            // 4. PROFILE (✅ OPTIMIZED: Cache 7 hari)
+            // ==========================================
+            'profile' => Cache::remember('profile:data', now()->addWeek(), function () {
+                return [
+                    'name' => 'Andrew Lie',
+                    'bio' => 'Building robust web applications with Laravel, Inertia, and React.',
+                    'avatar' => 'https://ui-avatars.com/api/?name=Andrew+Lie&background=0D8ABC&color=fff',
+                    'social' => [
+                        'github' => 'https://github.com/andrewlie',
+                        'linkedin' => 'https://linkedin.com/in/andrewlie',
+                        'twitter' => 'https://twitter.com/andrewlie',
+                    ],
+                ];
+            }),
+        ];
+
+        return Inertia::render('Portfolio/Index', $data);
     }
 
-    /**
-     * Show the form for creating a new project.
-     */
-    public function create()
+    public function show(string $slug): Response
     {
-        return Inertia::render('Admin/Project/ProjectForm', [
-            'typeForm' => 'create',
-            'project' => null,
-        ]);
-    }
+        $project = Project::where('slug', $slug)
+            ->whereIn('status', ['ongoing', 'completed', 'upcoming'])
+            ->firstOrFail();
 
-    /**
-     * Store a newly created project in storage.
-     */
-    public function store(StoreProjectRequest $request)
-    {
-        $data = $request->validated();
+        // ✅ OPTIMIZED: Select hanya kolom yang dibutuhkan
+        $otherProjects = Project::select(['id', 'title', 'slug', 'thumbnail_url', 'started_at'])
+            ->where('id', '!=', $project->id)
+            ->whereIn('status', ['ongoing', 'completed'])
+            ->latest('started_at')
+            ->limit(3)
+            ->get()
+            ->map(function ($p) {
+                return [
+                    'title' => $p->title,
+                    'slug' => $p->slug,
+                    'image' => $p->thumbnail_full_url ?? 'https://via.placeholder.com/600x400?text=No+Image',
+                ];
+            });
 
-        try {
-            // 1. Upload Thumbnail ke Cloudinary
-            if ($request->hasFile('thumbnail')) {
-                $data['thumbnail_url'] = $this->uploadToCloudinary(
-                    $request->file('thumbnail'),
-                    $request->slug ?: str()->slug($request->title)
-                );
-            }
-            
-            // Hapus raw file dari data
-            unset($data['thumbnail']);
-
-            // 2. Decode JSON String technologies dari React
-            if ($request->has('technologies')) {
-                $data['technologies'] = json_decode($request->technologies, true) ?? [];
-            }
-
-            // 3. Create project
-            Project::create($data);
-
-            return redirect()
-                ->route('admin.project.index')
-                ->with('success', 'Project berhasil dibuat!');
-
-        } catch (\Exception $e) {
-            Log::error('Error creating project', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return back()
-                ->withInput()
-                ->withErrors(['error' => 'Gagal membuat project: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Show the form for editing the specified project.
-     */
-    public function edit(Project $project)
-    {
-        return Inertia::render('Admin/Project/ProjectForm', [
-            'typeForm' => 'edit',
+        return Inertia::render('Portfolio/ProjectDetail', [
             'project' => [
                 'id' => $project->id,
                 'title' => $project->title,
                 'slug' => $project->slug,
                 'excerpt' => $project->excerpt,
-                'technologies' => $project->technologies, // Array otomatis dari cast
-                'thumbnail_url' => $project->thumbnail_full_url, // Full Cloudinary URL
+                'description' => $project->description,
+                'image' => $project->thumbnail_full_url,
+                'technologies' => $project->technologies,
                 'demo_url' => $project->demo_url,
                 'repo_url' => $project->repo_url,
-                'started_at' => $project->started_at?->format('Y-m-d'),
-                'finished_at' => $project->finished_at?->format('Y-m-d'),
                 'status' => $project->status,
                 'type' => $project->type,
+                'started_at' => $project->started_at?->format('M Y'),
+                'finished_at' => $project->finished_at?->format('M Y') ?? 'Present',
+                'duration' => $project->duration_days ? "{$project->duration_days} days" : 'Ongoing',
             ],
+            'other_projects' => $otherProjects,
         ]);
     }
 
-    /**
-     * Update the specified project in storage.
-     */
-    public function update(UpdateProjectRequest $request, Project $project)
+    public function showBlog(string $slug): Response
     {
-        $data = $request->validated();
+        // ✅ OPTIMIZED: Pakai scope withProjectData()
+        $blog = BlogPost::withProjectData()
+            ->where('slug', $slug)
+            ->where('is_published', true)
+            ->firstOrFail();
+
+        // ✅ OPTIMIZED: Gunakan query builder yang lebih efisien
+        $relatedPosts = BlogPost::withProjectData()
+            ->where('project_id', $blog->project_id)
+            ->where('id', '!=', $blog->id)
+            ->published()
+            ->latest()
+            ->limit(3)
+            ->get();
+
+        // ✅ OPTIMIZED: Filler logic lebih clean
+        if ($relatedPosts->count() < 3) {
+            $needed = 3 - $relatedPosts->count();
+            $existingIds = $relatedPosts->pluck('id')->push($blog->id);
+
+            $fillerPosts = BlogPost::withProjectData()
+                ->whereNotIn('id', $existingIds)
+                ->published()
+                ->latest()
+                ->limit($needed)
+                ->get();
+
+            $relatedPosts = $relatedPosts->merge($fillerPosts);
+        }
+
+        // ✅ OPTIMIZED: Mapping lebih efisien
+        $mappedRelated = $relatedPosts->map(function ($b) {
+            return [
+                'title' => $b->title,
+                'slug' => $b->slug,
+                'published_at' => $b->published_at?->format('M d, Y') ?? 'Draft',
+                'image' => $b->project?->thumbnail_full_url ?? 'https://grainy-gradients.vercel.app/noise.svg',
+                'project_name' => $b->project?->title ?? 'Research',
+            ];
+        });
+
+        return Inertia::render('Portfolio/BlogDetail', [
+            'blog' => [
+                'id' => $blog->id,
+                'title' => $blog->title,
+                'slug' => $blog->slug,
+                'content' => $blog->content,
+                'author' => 'Andrew Lie',
+                'published_at' => $blog->published_at?->format('F d, Y') ?? 'Draft',
+                'read_time' => ceil(str_word_count(strip_tags($blog->content)) / 200).' min read',
+                'project' => $blog->project ? [
+                    'title' => $blog->project->title,
+                    'slug' => $blog->project->slug,
+                    'image' => $blog->project->thumbnail_full_url,
+                    'url' => route('portfolio.project.show', $blog->project->slug),
+                ] : null,
+            ],
+            'related_posts' => $mappedRelated,
+        ]);
+    }
+
+    public function sendMessage(Request $request)
+    {
+        $key = 'contact-form:'.$request->ip();
+
+        if (RateLimiter::tooManyAttempts($key, 3)) {
+            $seconds = RateLimiter::availableIn($key);
+
+            return back()->withErrors([
+                'rate_limit' => "Too many attempts. Please try again in {$seconds} seconds.",
+            ]);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|min:2',
+            'email' => 'required|email:rfc,dns|max:255',
+            'phone' => 'nullable|string|max:20|regex:/^[\d\s\+\-\(\)]+$/',
+            'message' => 'required|string|min:10|max:2000',
+        ], [
+            'name.required' => 'Identifier name is required.',
+            'name.min' => 'Name must be at least 2 characters.',
+            'email.required' => 'Digital address (email) is required.',
+            'email.email' => 'Please provide a valid email address.',
+            'phone.regex' => 'Invalid phone number format.',
+            'message.required' => 'Message payload cannot be empty.',
+            'message.min' => 'Message must be at least 10 characters.',
+            'message.max' => 'Message cannot exceed 2000 characters.',
+        ]);
 
         try {
-            // 1. Handle Thumbnail dengan robust error handling
-            if ($request->hasFile('thumbnail')) {
-                // Hapus file lama HANYA jika URL-nya valid Cloudinary
-                if ($project->thumbnail_url && str_contains($project->thumbnail_url, 'cloudinary.com')) {
-                    $this->deleteFromCloudinary($project->thumbnail_url);
-                }
+            $contactData = array_merge($validated, [
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
-                // Upload thumbnail baru
-                $data['thumbnail_url'] = $this->uploadToCloudinary(
-                    $request->file('thumbnail'),
-                    $request->slug ?: $project->slug
-                );
-            }
-            
-            unset($data['thumbnail']);
+            $contact = Contact::create($contactData);
+            Mail::to(config('mail.from.address'))->send(new ContactFormMail($contactData));
+            RateLimiter::hit($key, 3600);
 
-            // 2. Decode technologies dari React
-            if ($request->has('technologies')) {
-                $data['technologies'] = json_decode($request->technologies, true) ?? [];
-            }
+            Log::info('Contact form submitted successfully', [
+                'contact_id' => $contact->id,
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+            ]);
 
-            // 3. Update project
-            $project->update($data);
-
-            return redirect()
-                ->route('admin.project.edit', $project)
-                ->with('success', 'Project berhasil diupdate!');
+            return back()->with('success', '✅ Transmission received successfully! I will respond within 24-48 hours.');
 
         } catch (\Exception $e) {
-            Log::error('Error updating project', [
-                'project_id' => $project->id,
+            Log::error('Contact form submission failed', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'email' => $validated['email'] ?? 'unknown',
             ]);
 
-            return back()
-                ->withInput()
-                ->withErrors(['error' => 'Gagal update project: ' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * Remove the specified project from storage.
-     */
-    public function destroy(Project $project)
-    {
-        try {
-            // Hapus thumbnail dari Cloudinary
-            if ($project->thumbnail_url && str_contains($project->thumbnail_url, 'cloudinary.com')) {
-                $this->deleteFromCloudinary($project->thumbnail_url);
-            }
-
-            // Delete project
-            $project->delete();
-
-            return redirect()
-                ->route('admin.project.index')
-                ->with('success', 'Project berhasil dihapus!');
-
-        } catch (\Exception $e) {
-            Log::error('Error deleting project', [
-                'project_id' => $project->id,
-                'error' => $e->getMessage()
-            ]);
-
-            return back()
-                ->withErrors(['error' => 'Gagal menghapus project: ' . $e->getMessage()]);
-        }
-    }
-
-    // ==================== CLOUDINARY HELPER METHODS ====================
-
-    /**
-     * Upload image ke Cloudinary dengan error handling robust
-     *
-     * @param \Illuminate\Http\UploadedFile $file
-     * @param string $slug
-     * @return string Secure URL dari Cloudinary
-     * @throws \Exception
-     */
-    private function uploadToCloudinary($file, string $slug): string
-    {
-        // Validasi file object
-        if (!$file || !$file->isValid()) {
-            throw new \Exception('Invalid file upload');
-        }
-
-        $fileName = sprintf('%s-%s', str()->slug($slug), time());
-
-        try {
-            // Cek apakah credentials tersedia
-            $cloudName = env('CLOUDINARY_CLOUD_NAME');
-            $apiKey = env('CLOUDINARY_API_KEY');
-            $apiSecret = env('CLOUDINARY_API_SECRET');
-
-            if (!$cloudName || !$apiKey || !$apiSecret) {
-                throw new \Exception('Cloudinary credentials not configured properly');
-            }
-
-            // Initialize Cloudinary SDK
-            $cloudinary = new CloudinarySDK([
-                'cloud' => [
-                    'cloud_name' => $cloudName,
-                    'api_key' => $apiKey,
-                    'api_secret' => $apiSecret,
-                ],
-                'url' => ['secure' => true]
-            ]);
-
-            // Get file path dengan fallback
-            $filePath = $file->getRealPath() ?: $file->getPathname();
-            
-            if (!$filePath || !file_exists($filePath)) {
-                throw new \Exception('File path not accessible');
-            }
-
-            // Log upload attempt
-            Log::info('Uploading project thumbnail to Cloudinary', [
-                'file_name' => $fileName,
-                'file_size' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
-                'file_path' => $filePath
-            ]);
-
-            // Upload ke Cloudinary dengan optimization
-            $result = $cloudinary->uploadApi()->upload($filePath, [
-                'folder' => self::CLOUDINARY_FOLDER,
-                'public_id' => $fileName,
-                'resource_type' => 'image',
-                'transformation' => [
-                    'width' => 1200,
-                    'height' => 630,
-                    'crop' => 'limit',
-                    'quality' => 'auto',
-                    'fetch_format' => 'auto'
-                ]
-            ]);
-
-            // Log success
-            Log::info('Cloudinary upload successful', [
-                'url' => $result['secure_url'],
-                'public_id' => $result['public_id']
-            ]);
-
-            return $result['secure_url'];
-            
-        } catch (\Exception $e) {
-            Log::error('Cloudinary upload failed', [
-                'file_name' => $fileName,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            throw new \Exception('Failed to upload thumbnail to Cloudinary: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Hapus image dari Cloudinary
-     *
-     * @param string|null $fullUrl
-     * @return bool
-     */
-    private function deleteFromCloudinary(?string $fullUrl): bool
-    {
-        // Early return jika URL kosong
-        if (!$fullUrl) {
-            Log::info('Delete skipped: Empty URL');
-            return false;
-        }
-
-        // Early return jika bukan Cloudinary URL
-        if (!str_contains($fullUrl, 'cloudinary.com')) {
-            Log::info('Delete skipped: Not a Cloudinary URL', ['url' => $fullUrl]);
-            return false;
-        }
-
-        try {
-            // Extract public ID dari URL
-            $publicId = $this->getPublicIdFromUrl($fullUrl);
-
-            if (!$publicId) {
-                Log::warning('Failed to extract public ID from URL', ['url' => $fullUrl]);
-                return false;
-            }
-
-            // Cek credentials
-            $cloudName = env('CLOUDINARY_CLOUD_NAME');
-            $apiKey = env('CLOUDINARY_API_KEY');
-            $apiSecret = env('CLOUDINARY_API_SECRET');
-
-            if (!$cloudName || !$apiKey || !$apiSecret) {
-                Log::error('Cloudinary credentials not configured for delete operation');
-                return false;
-            }
-
-            // Initialize Cloudinary SDK
-            $cloudinary = new CloudinarySDK([
-                'cloud' => [
-                    'cloud_name' => $cloudName,
-                    'api_key' => $apiKey,
-                    'api_secret' => $apiSecret,
-                ]
-            ]);
-
-            Log::info('Deleting from Cloudinary', ['public_id' => $publicId]);
-
-            // Delete dari Cloudinary
-            $result = $cloudinary->uploadApi()->destroy($publicId);
-            
-            Log::info('Cloudinary delete result', [
-                'public_id' => $publicId,
-                'result' => $result
-            ]);
-
-            return true;
-
-        } catch (\Exception $e) {
-            // PENTING: Log error tapi JANGAN throw exception
-            // Delete gagal tidak boleh block proses update
-            Log::error('Cloudinary delete failed', [
-                'url' => $fullUrl,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return false;
-        }
-    }
-
-    /**
-     * Extract Public ID dari Cloudinary URL
-     *
-     * @param string $url
-     * @return string|null
-     */
-    private function getPublicIdFromUrl(string $url): ?string
-    {
-        try {
-            // Cek apakah URL mengandung cloudinary.com
-            if (!str_contains($url, 'cloudinary.com')) {
-                return null;
-            }
-
-            // Parse URL path
-            $path = parse_url($url, PHP_URL_PATH);
-            
-            if (!$path) {
-                Log::warning('Failed to parse URL path', ['url' => $url]);
-                return null;
-            }
-
-            // Cari posisi folder
-            $folderPos = strpos($path, self::CLOUDINARY_FOLDER);
-
-            if ($folderPos === false) {
-                Log::warning('Folder not found in URL path', [
-                    'path' => $path,
-                    'folder' => self::CLOUDINARY_FOLDER
-                ]);
-                return null;
-            }
-
-            // Extract relative path mulai dari folder
-            $relativePath = substr($path, $folderPos);
-
-            // Remove extension dan construct public ID
-            $dirname = pathinfo($relativePath, PATHINFO_DIRNAME);
-            $filename = pathinfo($relativePath, PATHINFO_FILENAME);
-
-            $publicId = $dirname . '/' . $filename;
-
-            Log::info('Extracted public ID from URL', [
-                'url' => $url,
-                'public_id' => $publicId
-            ]);
-
-            return $publicId;
-
-        } catch (\Exception $e) {
-            Log::error('Error extracting public ID from URL', [
-                'url' => $url,
-                'error' => $e->getMessage()
-            ]);
-            
-            return null;
+            return back()->withErrors([
+                'system' => 'System error occurred. Please try again or contact me directly at andrewalfonsolie1@gmail.com',
+            ])->withInput();
         }
     }
 }

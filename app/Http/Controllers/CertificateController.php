@@ -7,7 +7,8 @@ use App\Http\Requests\UpdateCertificateRequest;
 use App\Models\Certificate;
 use App\Models\Tag;
 use Cloudinary\Cloudinary as CloudinarySDK;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+// use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+// use Cloudinary\Cloudinary as CloudinarySDK;
 use Illuminate\Support\Facades\Log;
 // Import Cloudinary Facade
 use Inertia\Inertia;
@@ -22,16 +23,13 @@ class CertificateController extends Controller
         $fileName = sprintf('%s-%s', $slug, time());
 
         try {
-            // ✅ Inisialisasi Cloudinary dengan config explicit
             $cloudinary = new CloudinarySDK([
                 'cloud' => [
                     'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
                     'api_key' => env('CLOUDINARY_API_KEY'),
                     'api_secret' => env('CLOUDINARY_API_SECRET'),
                 ],
-                'url' => [
-                    'secure' => true,
-                ],
+                'url' => ['secure' => true],
             ]);
 
             $result = $cloudinary->uploadApi()->upload($file->getRealPath(), [
@@ -40,14 +38,12 @@ class CertificateController extends Controller
                 'resource_type' => 'auto',
             ]);
 
-            // Return secure URL
             return $result['secure_url'];
 
         } catch (\Exception $e) {
-            \Log::error('Cloudinary upload error', [
+            Log::error('Cloudinary upload error (Certificate)', [
                 'message' => $e->getMessage(),
                 'file' => $fileName,
-                'trace' => $e->getTraceAsString(),
             ]);
 
             throw new \Exception('Failed to upload to Cloudinary: '.$e->getMessage());
@@ -216,7 +212,7 @@ class CertificateController extends Controller
 
     private function deleteFromCloudinary(?string $fullUrl): bool
     {
-        if (! $fullUrl) {
+        if (! $fullUrl || ! str_contains($fullUrl, 'cloudinary.com')) {
             return false;
         }
 
@@ -237,7 +233,7 @@ class CertificateController extends Controller
                 return true;
             }
         } catch (\Exception $e) {
-            \Log::error('Gagal hapus gambar Cloudinary: '.$e->getMessage());
+            Log::error('Cloudinary delete error (Certificate): '.$e->getMessage());
         }
 
         return false;
