@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Certificate;
 use App\Observers\CertificateObserver;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,5 +24,8 @@ class AppServiceProvider extends ServiceProvider
     {
         //
         Certificate::observe(CertificateObserver::class);
+        if($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
     }
 }
