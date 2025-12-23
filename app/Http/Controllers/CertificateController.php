@@ -6,23 +6,60 @@ use App\Http\Requests\StoreCertificateRequest;
 use App\Http\Requests\UpdateCertificateRequest;
 use App\Models\Certificate;
 use App\Models\Tag;
-use Illuminate\Support\Facades\Storage;
+use Cloudinary\Cloudinary as CloudinarySDK;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Illuminate\Support\Facades\Log;
+// Import Cloudinary Facade
 use Inertia\Inertia;
 
 class CertificateController extends Controller
 {
-    private const STORAGE_DISK = 'public';
-    private const IMAGE_PATH = 'certificates/images';
+    // Folder di dalam Cloudinary
+    private const CLOUDINARY_FOLDER = 'certificates';
 
-    /**
-     * Display a listing of certificates.
-     */
+    private function uploadToCloudinary($file, string $slug): string
+    {
+        $fileName = sprintf('%s-%s', $slug, time());
+
+        try {
+            // ✅ Inisialisasi Cloudinary dengan config explicit
+            $cloudinary = new CloudinarySDK([
+                'cloud' => [
+                    'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+                    'api_key' => env('CLOUDINARY_API_KEY'),
+                    'api_secret' => env('CLOUDINARY_API_SECRET'),
+                ],
+                'url' => [
+                    'secure' => true,
+                ],
+            ]);
+
+            $result = $cloudinary->uploadApi()->upload($file->getRealPath(), [
+                'folder' => self::CLOUDINARY_FOLDER,
+                'public_id' => $fileName,
+                'resource_type' => 'auto',
+            ]);
+
+            // Return secure URL
+            return $result['secure_url'];
+
+        } catch (\Exception $e) {
+            \Log::error('Cloudinary upload error', [
+                'message' => $e->getMessage(),
+                'file' => $fileName,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw new \Exception('Failed to upload to Cloudinary: '.$e->getMessage());
+        }
+    }
+
     public function index()
     {
         $certificates = Certificate::with('tags')
             ->latestIssued()
             ->paginate(10)
-            ->through(fn($cert) => [
+            ->through(fn ($cert) => [
                 'id' => $cert->id,
                 'name' => $cert->name,
                 'issuer' => $cert->issuer,
@@ -30,12 +67,13 @@ class CertificateController extends Controller
                 'issued_year' => $cert->issued_year,
                 'credential_id' => $cert->credential_id,
                 'credential_url' => $cert->credential_url,
-                'image_url' => $cert->image_full_url,
+                // Karena di DB sekarang tersimpan URL full, panggil langsung
+                'image_url' => $cert->image_url,
 
-                // 🔥 PENTING: Kirim file_type untuk frontend
+                // Logic file type tetap sama
                 'file_type' => $this->getFileType($cert->image_url),
 
-                'tags' => $cert->tags->map(fn($tag) => [
+                'tags' => $cert->tags->map(fn ($tag) => [
                     'id' => $tag->id,
                     'name' => $tag->name,
                     'slug' => $tag->slug,
@@ -54,7 +92,7 @@ class CertificateController extends Controller
      */
     public function create()
     {
-        $tags = Tag::orderBy('name')->get()->map(fn($tag) => [
+        $tags = Tag::orderBy('name')->get()->map(fn ($tag) => [
             'value' => $tag->id,
             'label' => $tag->name,
             'color' => $tag->color,
@@ -74,23 +112,23 @@ class CertificateController extends Controller
     {
         $data = $request->validated();
 
-        // Upload image/PDF kalau ada
+        // Upload image/PDF ke Cloudinary
         if ($request->hasFile('image')) {
-            $data['image_url'] = $this->uploadImage(
+            $data['image_url'] = $this->uploadToCloudinary(
                 $request->file('image'),
                 str()->slug($request->name)
             );
         }
 
-        // Simpan tags sementara, lalu hapus dari $data
+        // Simpan tags sementara
         $tags = $data['tags'] ?? [];
         unset($data['tags']);
 
         // Create certificate
         $certificate = Certificate::create($data);
 
-        // Attach tags ke certificate
-        if (!empty($tags)) {
+        // Attach tags
+        if (! empty($tags)) {
             $certificate->tags()->attach($tags);
         }
 
@@ -106,7 +144,7 @@ class CertificateController extends Controller
     {
         $certificate->load('tags');
 
-        $tags = Tag::orderBy('name')->get()->map(fn($tag) => [
+        $tags = Tag::orderBy('name')->get()->map(fn ($tag) => [
             'value' => $tag->id,
             'label' => $tag->name,
             'color' => $tag->color,
@@ -121,9 +159,8 @@ class CertificateController extends Controller
                 'issued_at' => $certificate->issued_at->format('Y-m-d'),
                 'credential_id' => $certificate->credential_id,
                 'credential_url' => $certificate->credential_url,
-                'image_url' => $certificate->image_full_url,
+                'image_url' => $certificate->image_url, // URL Cloudinary
 
-                // 🔥 Kirim file_type untuk form edit
                 'file_type' => $this->getFileType($certificate->image_url),
 
                 'tags' => $certificate->tags->pluck('id')->toArray(),
@@ -141,24 +178,20 @@ class CertificateController extends Controller
 
         // Upload image/PDF baru kalau ada
         if ($request->hasFile('image')) {
-            // Hapus file lama
-            $this->deleteImage($certificate->image_url);
+            // 1. Hapus file lama di Cloudinary
+            $this->deleteFromCloudinary($certificate->image_url);
 
-            // Upload file baru
-            $data['image_url'] = $this->uploadImage(
+            // 2. Upload file baru
+            $data['image_url'] = $this->uploadToCloudinary(
                 $request->file('image'),
                 str()->slug($request->name)
             );
         }
 
-        // Simpan tags sementara
         $tags = $data['tags'] ?? [];
         unset($data['tags']);
 
-        // Update certificate
         $certificate->update($data);
-
-        // Sync tags (hapus yang lama, tambahin yang baru)
         $certificate->tags()->sync($tags);
 
         return redirect()
@@ -171,7 +204,9 @@ class CertificateController extends Controller
      */
     public function destroy(Certificate $certificate)
     {
-        $this->deleteImage($certificate->image_url);
+        // Hapus file di Cloudinary
+        $this->deleteFromCloudinary($certificate->image_url);
+
         $certificate->delete();
 
         return redirect()
@@ -179,53 +214,82 @@ class CertificateController extends Controller
             ->with('success', 'Sertifikat berhasil dihapus!');
     }
 
-    // ==================== Private Methods ====================
-
-    /**
-     * Upload image atau PDF file.
-     */
-    private function uploadImage($file, string $slug): string
+    private function deleteFromCloudinary(?string $fullUrl): bool
     {
-        $filename = sprintf(
-            '%s-%s.%s',
-            $slug,
-            time(),
-            $file->extension()
-        );
-
-        return $file->storeAs(
-            self::IMAGE_PATH,
-            $filename,
-            self::STORAGE_DISK
-        );
-    }
-
-    /**
-     * Delete image atau PDF file.
-     */
-    private function deleteImage(?string $imagePath): bool
-    {
-        if (!$imagePath || filter_var($imagePath, FILTER_VALIDATE_URL)) {
+        if (! $fullUrl) {
             return false;
         }
 
-        if (Storage::disk(self::STORAGE_DISK)->exists($imagePath)) {
-            return Storage::disk(self::STORAGE_DISK)->delete($imagePath);
+        try {
+            $publicId = $this->getPublicIdFromUrl($fullUrl);
+
+            if ($publicId) {
+                $cloudinary = new CloudinarySDK([
+                    'cloud' => [
+                        'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
+                        'api_key' => env('CLOUDINARY_API_KEY'),
+                        'api_secret' => env('CLOUDINARY_API_SECRET'),
+                    ],
+                ]);
+
+                $cloudinary->uploadApi()->destroy($publicId);
+
+                return true;
+            }
+        } catch (\Exception $e) {
+            \Log::error('Gagal hapus gambar Cloudinary: '.$e->getMessage());
         }
 
         return false;
     }
 
+    private function getPublicIdFromUrl(string $url): ?string
+    {
+        // Cek apakah ini URL cloudinary
+        if (! str_contains($url, 'cloudinary.com')) {
+            return null;
+        }
+
+        // ✅ FIX: Add null check
+        $path = parse_url($url, PHP_URL_PATH);
+
+        if (! $path) {
+            Log::warning("Failed to parse Cloudinary URL: {$url}");
+
+            return null;
+        }
+
+        // Cari posisi folder project kita
+        $folderPos = strpos($path, self::CLOUDINARY_FOLDER);
+
+        if ($folderPos === false) {
+            return null;
+        }
+
+        // Ambil string mulai dari folder name
+        $relativePath = substr($path, $folderPos);
+
+        // Hilangkan extension
+        return pathinfo($relativePath, PATHINFO_DIRNAME).'/'.pathinfo($relativePath, PATHINFO_FILENAME);
+    }
+
     /**
-     * 🔥 Get file type (pdf atau image) dari file path.
+     * Get file type (pdf atau image) dari file path.
      */
     private function getFileType(?string $filePath): string
     {
-        if (!$filePath) {
+        if (! $filePath) {
             return 'image';
         }
 
-        $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        // ✅ FIX: Add null check untuk parse_url
+        $parsedPath = parse_url($filePath, PHP_URL_PATH);
+
+        if (! $parsedPath) {
+            return 'image'; // Default ke image jika URL invalid
+        }
+
+        $extension = strtolower(pathinfo($parsedPath, PATHINFO_EXTENSION));
 
         return $extension === 'pdf' ? 'pdf' : 'image';
     }

@@ -2,19 +2,17 @@
 
 namespace App\Models;
 
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\Model; // Import Facade
+use Illuminate\Support\Facades\Log;
 
 class Certificate extends Model
 {
     use HasFactory;
 
-    /**
-     * Storage disk untuk gambar certificate.
-     */
-    private const STORAGE_DISK = 'public';
-    private const IMAGE_PATH = 'certificates/images';
+    // Hapus konstanta STORAGE_DISK karena kita pakai Cloudinary
+    // private const STORAGE_DISK = 'public';
 
     protected $fillable = [
         'name',
@@ -33,36 +31,23 @@ class Certificate extends Model
 
     // ==================== Relationships ====================
 
-    /**
-     * Certificate punya banyak tags (many-to-many).
-     */
     public function tags()
     {
-        return $this->belongsToMany(Tag::class)
-            ->withTimestamps(); // Simpan created_at di pivot table
+        return $this->belongsToMany(Tag::class)->withTimestamps();
     }
 
     // ==================== Scopes ====================
 
-    /**
-     * Filter berdasarkan issuer.
-     */
     public function scopeByIssuer($query, string $issuer)
     {
         return $query->where('issuer', $issuer);
     }
 
-    /**
-     * Filter berdasarkan tahun.
-     */
     public function scopeByYear($query, int $year)
     {
         return $query->whereYear('issued_at', $year);
     }
 
-    /**
-     * Filter berdasarkan tag.
-     */
     public function scopeByTag($query, $tagId)
     {
         return $query->whereHas('tags', function ($q) use ($tagId) {
@@ -70,9 +55,6 @@ class Certificate extends Model
         });
     }
 
-    /**
-     * Urutkan dari yang terbaru.
-     */
     public function scopeLatestIssued($query)
     {
         return $query->orderBy('issued_at', 'desc');
@@ -81,26 +63,14 @@ class Certificate extends Model
     // ==================== Accessors ====================
 
     /**
-     * Get full URL untuk gambar certificate.
+     * Get full URL.
+     * Karena sekarang kita simpan full URL di DB, logic ini jadi simpel.
      */
     public function getImageFullUrlAttribute(): ?string
     {
-        if (!$this->image_url) {
-            return null;
-        }
-
-        // Kalau sudah full URL (external)
-        if (filter_var($this->image_url, FILTER_VALIDATE_URL)) {
-            return $this->image_url;
-        }
-
-        // Generate URL dari Storage
-        return Storage::disk(self::STORAGE_DISK)->url($this->image_url);
+        return $this->image_url;
     }
 
-    /**
-     * Get tahun terbit certificate.
-     */
     public function getIssuedYearAttribute(): int
     {
         return $this->issued_at->year;
@@ -111,27 +81,39 @@ class Certificate extends Model
      */
     public function hasImage(): bool
     {
-        if (!$this->image_url) {
-            return false;
-        }
-
-        if (filter_var($this->image_url, FILTER_VALIDATE_URL)) {
-            return true;
-        }
-
-        return Storage::disk(self::STORAGE_DISK)->exists($this->image_url);
+        return ! empty($this->image_url);
     }
 
-    // ==================== Events ====================
+    // ==================== Events (Auto Delete Cloudinary) ====================
 
     protected static function boot()
     {
         parent::boot();
 
-        // Hapus gambar certificate saat dihapus
         static::deleting(function ($certificate) {
-            if ($certificate->image_url && !filter_var($certificate->image_url, FILTER_VALIDATE_URL)) {
-                Storage::disk(self::STORAGE_DISK)->delete($certificate->image_url);
+            if ($certificate->image_url) {
+                try {
+                    // ✅ FIX: Add null check untuk parse_url
+                    $path = parse_url($certificate->image_url, PHP_URL_PATH);
+
+                    if (! $path) {
+                        Log::warning("Failed to parse URL on delete: {$certificate->image_url}");
+
+                        return;
+                    }
+
+                    // Logic untuk mengambil Public ID dari URL Cloudinary
+                    if (str_contains($path, 'certificates/')) {
+                        preg_match('/(certificates\/[^\.]+)/', $path, $matches);
+
+                        if (isset($matches[1])) {
+                            $publicId = $matches[1];
+                            Cloudinary::destroy($publicId);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Gagal hapus gambar Cloudinary saat delete certificate: '.$e->getMessage());
+                }
             }
         });
     }
