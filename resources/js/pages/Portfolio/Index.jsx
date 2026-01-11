@@ -2,6 +2,7 @@ import {
     ArrowRightOutlined,
     CloseOutlined,
     DownloadOutlined,
+    FileOutlined,
     GithubOutlined,
     LinkedinOutlined,
     LoadingOutlined,
@@ -29,12 +30,13 @@ export default function PortfolioIndex({
     recent_blogs,
 }) {
     // --- GET FLASH MESSAGES FROM INERTIA ---
-    console.log("certificate", JSON.stringify(certificates, null, 2));
+    console.log('certificate', JSON.stringify(certificates, null, 2));
     const { flash } = usePage().props;
 
     // --- State & Hooks ---
     const [isLoading, setIsLoading] = useState(true);
     const [previewCert, setPreviewCert] = useState(null);
+    const [pdfError, setPdfError] = useState(false);
 
     // Pagination Logic
     const [projectList, setProjectList] = useState(projects.data || []);
@@ -48,6 +50,90 @@ export default function PortfolioIndex({
         phone: '',
         message: '',
     });
+
+    // --- PDF Helper Functions ---
+    const isPDF = (url) => {
+        if (!url) return false;
+        return url.toLowerCase().endsWith('.pdf');
+    };
+
+    // Generate PDF thumbnail from Cloudinary first page
+    const getPDFThumbnail = (pdfUrl) => {
+        if (!pdfUrl) return null;
+
+        // Check if it's a Cloudinary PDF URL
+        if (pdfUrl.includes('cloudinary.com') && pdfUrl.includes('.pdf')) {
+            // Transform Cloudinary URL to generate thumbnail from first page
+            // Example: .../upload/v123/file.pdf -> .../upload/pg_1,w_600,h_400,c_fill,f_jpg,q_auto/v123/file.pdf
+
+            const urlParts = pdfUrl.split('/upload/');
+            if (urlParts.length === 2) {
+                const baseUrl = urlParts[0] + '/upload/';
+                const pathAndFile = urlParts[1];
+
+                // Transformation parameters:
+                // pg_1 = first page
+                // w_600 = width 600px
+                // h_400 = height 400px
+                // c_fill = crop/fill mode
+                // f_jpg = convert to JPEG
+                // q_auto = automatic quality optimization
+                const thumbnailUrl =
+                    baseUrl +
+                    'pg_1,w_600,h_400,c_fill,f_jpg,q_auto/' +
+                    pathAndFile;
+
+                return thumbnailUrl;
+            }
+        }
+
+        return null;
+    };
+
+    // Get certificate thumbnail (PDF or Image)
+    const getCertificateThumbnail = (cert) => {
+        if (isPDF(cert.image)) {
+            // For PDF, generate thumbnail from first page
+            return getPDFThumbnail(cert.image);
+        }
+        return cert.image;
+    };
+
+    // Enhanced download handler with Cloudinary support
+    const handleDownloadPDF = (url, filename) => {
+        try {
+            // Method 1: Use Cloudinary's attachment flag for proper download
+            if (url.includes('cloudinary.com')) {
+                const urlParts = url.split('/upload/');
+                if (urlParts.length === 2) {
+                    // Add fl_attachment to force download instead of inline view
+                    const downloadUrl =
+                        urlParts[0] + '/upload/fl_attachment/' + urlParts[1];
+
+                    // Open in new tab (browser will handle download)
+                    window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+                    message.success('Download started!');
+                    return;
+                }
+            }
+
+            // Method 2: Fallback to standard download for non-Cloudinary URLs
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename || 'certificate.pdf';
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            message.success('Download started!');
+        } catch (error) {
+            console.error('Download error:', error);
+            message.error('Download failed. Opening in new tab instead.');
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+    };
 
     // --- Refs ---
     const containerRef = useRef(null);
@@ -103,7 +189,6 @@ export default function PortfolioIndex({
                     duration: 0.8,
                     ease: 'power4.inOut',
                 })
-
                 // Hero Reveal
                 .from(
                     '.hero-element',
@@ -136,7 +221,7 @@ export default function PortfolioIndex({
                 ease: 'linear',
             });
 
-            // Scroll Triggers untuk Section
+            // Scroll Triggers
             gsap.utils.toArray('.reveal-section').forEach((section) => {
                 gsap.from(section, {
                     scrollTrigger: { trigger: section, start: 'top 80%' },
@@ -306,7 +391,7 @@ export default function PortfolioIndex({
                         <h1 className="hero-element text-5xl leading-tight font-bold text-white md:text-7xl">
                             Hi, I'm <br />
                             <span className="bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent">
-                                Andrew Alfonso Lie
+                                {profile.name}
                             </span>
                         </h1>
                         <div className="hero-element flex h-12 items-center text-2xl font-light text-slate-400 md:text-3xl">
@@ -456,8 +541,8 @@ export default function PortfolioIndex({
             </section>
 
             {/* CERTIFICATES */}
-            <section className="relative z-10 border-y border-white/5 bg-[#0a0f1e]/80 py-32 backdrop-blur-sm">
-                <div className="mx-auto max-w-7xl px-6">
+            <section className="relative z-10 border-y border-white/5 bg-[#0a0f1e]/80 px-6 py-32 backdrop-blur-sm">
+                <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-12 flex items-center gap-4">
                         <span className="block font-mono text-2xl font-bold tracking-widest text-indigo-500">
                             02 / Certifications
@@ -466,89 +551,184 @@ export default function PortfolioIndex({
                     </div>
 
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {certificates.map((cert) => (
-                            <div
-                                key={cert.id}
-                                onClick={() => setPreviewCert(cert)}
-                                className="reveal-section group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-slate-900 transition-all duration-500 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_0_40px_rgba(99,102,241,0.25)]"
-                            >
-                                <div className="absolute inset-0 h-full w-full bg-slate-950">
-                                    {cert.image ? (
-                                        <img
-                                            src={cert.image}
-                                            alt={cert.title}
-                                            className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100"
-                                        />
-                                    ) : (
-                                        <div className="h-full w-full bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-                                    )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/80 to-transparent transition-opacity duration-300 group-hover:via-[#020617]/60"></div>
-                                </div>
+                        {certificates.map((cert) => {
+                            const isFilePDF = isPDF(cert.image);
+                            const thumbnail = getCertificateThumbnail(cert);
 
-                                <div className="absolute bottom-0 left-0 z-20 w-full p-6">
-                                    <div className="mb-3 flex items-center justify-between">
-                                        <div className="flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 backdrop-blur-md">
-                                            <SafetyCertificateOutlined className="text-xs text-indigo-400" />
-                                            <span className="font-mono text-[10px] tracking-wider text-indigo-300">
-                                                VERIFIED
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <h4 className="mb-1 line-clamp-2 text-lg font-bold text-white transition-colors group-hover:text-indigo-200">
-                                        {cert.title}
-                                    </h4>
-
-                                    <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
-                                        <p className="font-mono text-xs text-slate-400 uppercase transition-colors group-hover:text-white">
-                                            {cert.issuer}
-                                        </p>
-                                        <span className="font-mono text-[10px] text-slate-600 group-hover:text-indigo-400">
-                                            {cert.issued_date}
-                                        </span>
-                                    </div>
-
-                                    {cert.credential_id && (
-                                        <div className="mt-2 flex items-center gap-1 rounded border border-white/5 bg-black/30 px-2 py-1.5 backdrop-blur-sm">
-                                            <span className="font-mono text-[9px] text-slate-500">
-                                                ID:
-                                            </span>
-                                            <span className="font-mono text-[10px] font-semibold text-indigo-400">
-                                                {cert.credential_id}
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    <div className="mt-3 flex gap-2 border-t border-white/5 pt-3">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setPreviewCert(cert);
-                                            }}
-                                            className="flex flex-1 items-center justify-center gap-2 rounded border border-indigo-500/30 bg-indigo-500/5 px-3 py-2 font-mono text-xs text-indigo-300 backdrop-blur-sm transition-all hover:bg-indigo-500/20 hover:text-white"
-                                        >
-                                            <ReadOutlined />
-                                            <span>View</span>
-                                        </button>
-
-                                        {cert.credential_url && (
-                                            <a
-                                                href={cert.credential_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                onClick={(e) =>
-                                                    e.stopPropagation()
-                                                }
-                                                className="flex flex-1 items-center justify-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 font-mono text-xs text-cyan-300 backdrop-blur-sm transition-all hover:bg-cyan-500/20 hover:text-white"
-                                            >
-                                                <SafetyCertificateOutlined />
-                                                <span>Verify</span>
-                                            </a>
+                            return (
+                                <div
+                                    key={cert.id}
+                                    // PERBAIKAN DI SINI:
+                                    // Hapus if-else window.open. Kita paksa semua masuk ke setPreviewCert.
+                                    onClick={() => {
+                                        setPreviewCert(cert);
+                                        setPdfError(false);
+                                    }}
+                                    className="reveal-section group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-slate-900 transition-all duration-500 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_0_40px_rgba(99,102,241,0.25)]"
+                                >
+                                    {/* Card content sama seperti sebelumnya */}
+                                    <div className="absolute inset-0 h-full w-full bg-slate-950">
+                                        {thumbnail ? (
+                                            <div className="relative h-full w-full">
+                                                <img
+                                                    src={thumbnail}
+                                                    alt={cert.title}
+                                                    className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-indigo-900/30 via-slate-900 to-slate-950">
+                                                <svg
+                                                    viewBox="64 64 896 896"
+                                                    width="80"
+                                                    height="80"
+                                                    fill="currentColor"
+                                                    className="text-indigo-400 opacity-40"
+                                                >
+                                                    <path d="M854.6 288.6L639.4 73.4c-6-6-14.1-9.4-22.6-9.4H192c-17.7 0-32 14.3-32 32v832c0 17.7 14.3 32 32 32h640c17.7 0 32-14.3 32-32V311.3c0-8.5-3.4-16.7-9.4-22.7zM790.2 326H602V137.8L790.2 326zm1.8 562H232V136h302v216a42 42 0 0 0 42 42h216v494z"></path>
+                                                </svg>
+                                                <p className="mt-4 font-mono text-xs text-indigo-300/60">
+                                                    PDF CERTIFICATE
+                                                </p>
+                                            </div>
                                         )}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/80 to-transparent"></div>
+                                    </div>
+
+                                    {/* Info overlay - sama seperti sebelumnya */}
+                                    <div className="absolute bottom-0 left-0 z-20 w-full p-6">
+                                        {/* Badge */}
+                                        <div className="mb-3 flex items-center justify-between">
+                                            <div className="flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 backdrop-blur-md">
+                                                <svg
+                                                    viewBox="64 64 896 896"
+                                                    width="12"
+                                                    height="12"
+                                                    fill="currentColor"
+                                                    className="text-indigo-400"
+                                                >
+                                                    <path d="M866.9 169.9L527.1 54.1C523 52.7 517.5 52 512 52s-11 .7-15.1 2.1L157.1 169.9c-8.3 2.8-15.1 12.4-15.1 21.2v482.4c0 8.8 5.7 20.4 12.6 25.9L499.3 968c3.5 2.7 8 4.1 12.6 4.1s9.2-1.4 12.6-4.1l344.7-268.6c6.9-5.4 12.6-17 12.6-25.9V191.1c.2-8.8-6.6-18.3-14.9-21.2zM810 654.3L512 886.5 214 654.3V226.7l298-101.6 298 101.6v427.6zm-405.8-201c-3-4.1-7.8-6.6-13-6.6H336c-6.5 0-10.3 7.4-6.5 12.7l126.4 174a16.1 16.1 0 0 0 26 0l212.6-292.7c3.8-5.3 0-12.7-6.5-12.7h-55.2c-5.1 0-10 2.5-13 6.6L468.9 542.4l-64.7-89.1z"></path>
+                                                </svg>
+                                                <span className="font-mono text-[10px] tracking-wider text-indigo-300">
+                                                    {isFilePDF
+                                                        ? 'PDF • CLICK TO OPEN'
+                                                        : 'VERIFIED'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Title */}
+                                        <h4 className="mb-1 line-clamp-2 text-lg font-bold text-white transition-colors group-hover:text-indigo-200">
+                                            {cert.title}
+                                        </h4>
+
+                                        {/* Meta info */}
+                                        <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
+                                            <p className="font-mono text-xs text-slate-400 uppercase transition-colors group-hover:text-white">
+                                                {cert.issuer}
+                                            </p>
+                                            <span className="font-mono text-[10px] text-slate-600 group-hover:text-indigo-400">
+                                                {cert.issued_date}
+                                            </span>
+                                        </div>
+
+                                        {/* Credential ID */}
+                                        {cert.credential_id && (
+                                            <div className="mt-2 flex items-center gap-1 rounded border border-white/5 bg-black/30 px-2 py-1.5 backdrop-blur-sm">
+                                                <span className="font-mono text-[9px] text-slate-500">
+                                                    ID:
+                                                </span>
+                                                <span className="font-mono text-[10px] font-semibold text-indigo-400">
+                                                    {cert.credential_id}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Action Buttons */}
+                                        <div className="mt-3 flex gap-2 border-t border-white/5 pt-3">
+                                            {isFilePDF ? (
+                                                // PDF: Show Open & Download buttons
+                                                <>
+                                                    <div className="flex flex-1 items-center justify-center gap-2 rounded border border-indigo-500/30 bg-indigo-500/5 px-3 py-2 font-mono text-xs text-indigo-300 backdrop-blur-sm transition-all group-hover:bg-indigo-500/20">
+                                                        <svg
+                                                            viewBox="64 64 896 896"
+                                                            width="14"
+                                                            height="14"
+                                                            fill="currentColor"
+                                                        >
+                                                            <path d="M880 112H144c-17.7 0-32 14.3-32 32v736c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V144c0-17.7-14.3-32-32-32zm-40 728H184V184h656v656zM304.8 524h50.7c3.7 0 6.8-3 6.8-6.8v-78.9c0-19.7 15.9-35.6 35.5-35.6h205.7v53.4c0 5.7 6.5 8.8 10.9 5.3l109.1-85.7c3.5-2.7 3.5-8 0-10.7l-109.1-85.7c-4.4-3.5-10.9-.3-10.9 5.3V338H397.7c-55.2 0-100.1 44.9-100.1 100.1v78.9c0 3.7 3.1 6.8 6.8 6.8l.4.2zm-4.2 134.9l109.1 85.7c4.4 3.5 10.9.3 10.9-5.3v-53.4h205.7c55.2 0 100.1-44.9 100.1-100.1v-78.9c0-3.7-3-6.8-6.8-6.8h-50.7c-3.7 0-6.8 3-6.8 6.8v78.9c0 19.7-15.9 35.6-35.5 35.6H420.6V568c0-5.7-6.5-8.8-10.9-5.3l-109.1 85.7c-3.5 2.5-3.5 7.8 0 10.5z"></path>
+                                                        </svg>
+                                                        <span>Open</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDownloadPDF(
+                                                                cert.image,
+                                                                `${cert.title}.pdf`,
+                                                            );
+                                                        }}
+                                                        className="flex flex-1 items-center justify-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 font-mono text-xs text-cyan-300 backdrop-blur-sm transition-all hover:bg-cyan-500/20 hover:text-white"
+                                                    >
+                                                        <svg
+                                                            viewBox="64 64 896 896"
+                                                            width="14"
+                                                            height="14"
+                                                            fill="currentColor"
+                                                        >
+                                                            <path d="M505.7 661a8 8 0 0 0 12.6 0l112-141.7c4.1-5.2.4-12.9-6.3-12.9h-74.1V168c0-4.4-3.6-8-8-8h-60c-4.4 0-8 3.6-8 8v338.3H400c-6.7 0-10.4 7.7-6.3 12.9l112 141.8zM878 626h-60c-4.4 0-8 3.6-8 8v154H214V634c0-4.4-3.6-8-8-8h-60c-4.4 0-8 3.6-8 8v198c0 17.7 14.3 32 32 32h684c17.7 0 32-14.3 32-32V634c0-4.4-3.6-8-8-8z"></path>
+                                                        </svg>
+                                                        <span>Download</span>
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                // Image: Show View button
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setPreviewCert(cert);
+                                                    }}
+                                                    className="flex flex-1 items-center justify-center gap-2 rounded border border-indigo-500/30 bg-indigo-500/5 px-3 py-2 font-mono text-xs text-indigo-300 backdrop-blur-sm transition-all hover:bg-indigo-500/20 hover:text-white"
+                                                >
+                                                    <svg
+                                                        viewBox="64 64 896 896"
+                                                        width="14"
+                                                        height="14"
+                                                        fill="currentColor"
+                                                    >
+                                                        <path d="M880 112H144c-17.7 0-32 14.3-32 32v736c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V144c0-17.7-14.3-32-32-32zm-40 728H184V184h656v656zM304.8 524h50.7c3.7 0 6.8-3 6.8-6.8v-78.9c0-19.7 15.9-35.6 35.5-35.6h205.7v53.4c0 5.7 6.5 8.8 10.9 5.3l109.1-85.7c3.5-2.7 3.5-8 0-10.7l-109.1-85.7c-4.4-3.5-10.9-.3-10.9 5.3V338H397.7c-55.2 0-100.1 44.9-100.1 100.1v78.9c0 3.7 3.1 6.8 6.8 6.8l.4.2z"></path>
+                                                    </svg>
+                                                    <span>View</span>
+                                                </button>
+                                            )}
+
+                                            {/* Verify button (if credential URL exists) */}
+                                            {cert.credential_url && (
+                                                <a
+                                                    href={cert.credential_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    onClick={(e) =>
+                                                        e.stopPropagation()
+                                                    }
+                                                    className="flex flex-1 items-center justify-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 font-mono text-xs text-cyan-300 backdrop-blur-sm transition-all hover:bg-cyan-500/20 hover:text-white"
+                                                >
+                                                    <svg
+                                                        viewBox="64 64 896 896"
+                                                        width="14"
+                                                        height="14"
+                                                        fill="currentColor"
+                                                    >
+                                                        <path d="M866.9 169.9L527.1 54.1C523 52.7 517.5 52 512 52s-11 .7-15.1 2.1L157.1 169.9c-8.3 2.8-15.1 12.4-15.1 21.2v482.4c0 8.8 5.7 20.4 12.6 25.9L499.3 968c3.5 2.7 8 4.1 12.6 4.1s9.2-1.4 12.6-4.1l344.7-268.6c6.9-5.4 12.6-17 12.6-25.9V191.1c.2-8.8-6.6-18.3-14.9-21.2zM810 654.3L512 886.5 214 654.3V226.7l298-101.6 298 101.6v427.6zm-405.8-201c-3-4.1-7.8-6.6-13-6.6H336c-6.5 0-10.3 7.4-6.5 12.7l126.4 174a16.1 16.1 0 0 0 26 0l212.6-292.7c3.8-5.3 0-12.7-6.5-12.7h-55.2c-5.1 0-10 2.5-13 6.6L468.9 542.4l-64.7-89.1z"></path>
+                                                    </svg>
+                                                    <span>Verify</span>
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </section>
@@ -674,7 +854,7 @@ export default function PortfolioIndex({
                         {/* FORM */}
                         <div className="grid gap-8 md:grid-cols-2">
                             <div className="group">
-                                <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-m text-cyan-500">
+                                <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-sm text-cyan-500">
                                     Name
                                     <span className="text-red-400">*</span>
                                 </label>
@@ -694,7 +874,7 @@ export default function PortfolioIndex({
                                 />
                             </div>
                             <div className="group">
-                                <label className="mb-2 ml-1 block font-mono text-m text-cyan-500">
+                                <label className="mb-2 ml-1 block font-mono text-sm text-cyan-500">
                                     Phone
                                 </label>
                                 <input
@@ -710,7 +890,7 @@ export default function PortfolioIndex({
                         </div>
 
                         <div className="group">
-                            <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-m text-cyan-500">
+                            <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-sm text-cyan-500">
                                 Email
                                 <span className="text-red-400">*</span>
                             </label>
@@ -732,7 +912,7 @@ export default function PortfolioIndex({
 
                         <div className="group">
                             <label className="mb-2 ml-1 flex items-center justify-between">
-                                <div className="flex items-center gap-2 font-mono text-m text-cyan-500">
+                                <div className="flex items-center gap-2 font-mono text-sm text-cyan-500">
                                     Message
                                     <span className="text-red-400">*</span>
                                 </div>
@@ -827,10 +1007,13 @@ export default function PortfolioIndex({
             {/* MODAL CERTIFICATE PREVIEW */}
             <Modal
                 open={!!previewCert}
-                onCancel={() => setPreviewCert(null)}
+                onCancel={() => {
+                    setPreviewCert(null);
+                    setPdfError(false);
+                }}
                 footer={null}
                 centered
-                width={900}
+                width={1000}
                 closeIcon={<CloseOutlined className="text-white" />}
                 styles={{
                     content: {
@@ -846,16 +1029,170 @@ export default function PortfolioIndex({
                 }}
             >
                 {previewCert && (
-                    <div className="p-6">
-                        <h3 className="mb-4 text-xl font-bold text-white">
-                            {previewCert.title}
-                        </h3>
-                        <div className="rounded-lg border border-white/10 bg-black/50 p-2">
-                            <img
-                                src={previewCert.image}
-                                className="h-auto max-h-[70vh] w-full object-contain"
-                                alt="Certificate"
-                            />
+                    <div className="relative">
+                        {/* Header */}
+                        <div className="border-b border-white/10 bg-slate-900/50 p-6 backdrop-blur-sm">
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                    <div className="mb-2 flex items-center gap-2">
+                                        <SafetyCertificateOutlined className="text-indigo-400" />
+                                        <span className="font-mono text-xs text-indigo-400 uppercase">
+                                            {isPDF(previewCert.image)
+                                                ? 'PDF Certificate'
+                                                : 'Image Certificate'}
+                                        </span>
+                                    </div>
+                                    <h3 className="mb-2 text-2xl font-bold text-white">
+                                        {previewCert.title}
+                                    </h3>
+                                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                                        <span className="font-mono text-slate-400">
+                                            <span className="text-slate-600">
+                                                Issued by:
+                                            </span>{' '}
+                                            <span className="text-white">
+                                                {previewCert.issuer}
+                                            </span>
+                                        </span>
+                                        <span className="h-1 w-1 rounded-full bg-slate-700"></span>
+                                        <span className="font-mono text-slate-400">
+                                            <span className="text-slate-600">
+                                                Date:
+                                            </span>{' '}
+                                            <span className="text-white">
+                                                {previewCert.issued_date}
+                                            </span>
+                                        </span>
+                                        {previewCert.credential_id && (
+                                            <>
+                                                <span className="h-1 w-1 rounded-full bg-slate-700"></span>
+                                                <span className="font-mono text-slate-400">
+                                                    <span className="text-slate-600">
+                                                        ID:
+                                                    </span>{' '}
+                                                    <span className="text-indigo-400">
+                                                        {
+                                                            previewCert.credential_id
+                                                        }
+                                                    </span>
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Action Buttons */}
+                            </div>
+                        </div>
+
+                        {/* Preview Content */}
+                        <div className="p-6">
+                            {isPDF(previewCert.image) ? (
+                                <div className="space-y-4">
+                                    {/* MENGGUNAKAN NATIVE OBJECT AGAR LEBIH CEPAT & STABIL DIBANDING GOOGLE DOCS */}
+                                    <div className="relative h-[70vh] w-full overflow-hidden rounded-lg border border-white/10 bg-slate-950">
+                                        <object
+                                            data={previewCert.image}
+                                            type="application/pdf"
+                                            className="h-full w-full"
+                                        >
+                                            {/* Fallback: Ini muncul HANYA jika browser tidak support PDF preview */}
+                                            <div className="flex h-full flex-col items-center justify-center space-y-4 p-8 text-center">
+                                                <FileOutlined className="text-4xl text-slate-500" />
+                                                <p className="text-slate-400">
+                                                    Browser Anda tidak mendukung
+                                                    preview PDF langsung.
+                                                </p>
+                                                <button
+                                                    onClick={() =>
+                                                        handleDownloadPDF(
+                                                            previewCert.image,
+                                                            `${previewCert.title}.pdf`,
+                                                        )
+                                                    }
+                                                    className="rounded-full bg-cyan-600 px-6 py-2 font-bold text-white transition hover:bg-cyan-500"
+                                                >
+                                                    Download PDF
+                                                </button>
+                                            </div>
+                                        </object>
+                                    </div>
+
+                                    {/* Tombol Action Tambahan di Bawah Preview (Agar User Selalu Punya Opsi) */}
+                                    <div className="flex justify-end gap-3 pt-2">
+                                        <div className="flex justify-end gap-2">
+                                            {isPDF(previewCert.image) && (
+                                                <button
+                                                    onClick={() =>
+                                                        handleDownloadPDF(
+                                                            previewCert.image,
+                                                            `${previewCert.title}.pdf`,
+                                                        )
+                                                    }
+                                                    className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 font-mono text-sm text-cyan-300 transition-all hover:bg-cyan-500/20 hover:text-white"
+                                                >
+                                                    <DownloadOutlined />
+                                                    Download
+                                                </button>
+                                            )}
+                                            {previewCert.credential_url && (
+                                                <a
+                                                    href={
+                                                        previewCert.credential_url
+                                                    }
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 font-mono text-sm text-indigo-300 transition-all hover:bg-indigo-500/20 hover:text-white"
+                                                >
+                                                    <SafetyCertificateOutlined />
+                                                    Verify 
+                                                </a>
+                                            )}
+                                        </div>
+                                        {/* <a
+                                            href={previewCert.image}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-bold text-white hover:bg-white/10"
+                                        >
+                                            <SendOutlined className="-rotate-45" />{' '}
+                                            Open New Tab
+                                        </a> */}
+                                    </div>
+                                </div>
+                            ) : (
+                                // Logic Image Preview (Biarkan Tetap Sama)
+                                <div className="rounded-lg border border-white/10 bg-black/50 p-2">
+                                    <img
+                                        src={previewCert.image}
+                                        className="h-auto max-h-[70vh] w-full object-contain"
+                                        alt="Certificate"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Tags if available */}
+                            {previewCert.tags &&
+                                previewCert.tags.length > 0 && (
+                                    <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                                        <span className="font-mono text-xs text-slate-500">
+                                            Tags:
+                                        </span>
+                                        {previewCert.tags.map((tag) => (
+                                            <span
+                                                key={tag.id}
+                                                className="rounded-full px-3 py-1 text-xs font-bold"
+                                                style={{
+                                                    backgroundColor: `${tag.color}20`,
+                                                    color: tag.color,
+                                                    border: `1px solid ${tag.color}40`,
+                                                }}
+                                            >
+                                                {tag.name}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                         </div>
                     </div>
                 )}
