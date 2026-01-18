@@ -2,60 +2,26 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\StoreCertificateRequest;
-use App\Http\Requests\UpdateCertificateRequest;
 use App\Models\Certificate;
 use App\Models\Tag;
-use Cloudinary\Cloudinary as CloudinarySDK;
-// use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
-// use Cloudinary\Cloudinary as CloudinarySDK;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-// Import Cloudinary Facade
 use Inertia\Inertia;
 
 class CertificateController extends Controller
 {
-    // Folder di dalam Cloudinary
-    private const CLOUDINARY_FOLDER = 'certificates';
-
-    private function uploadToCloudinary($file, string $slug): string
+    public function index(Request $request)
     {
-        $fileName = sprintf('%s-%s', $slug, time());
+        $query = Certificate::with('tags')->ordered();
 
-        try {
-            $cloudinary = new CloudinarySDK([
-                'cloud' => [
-                    'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-                    'api_key' => env('CLOUDINARY_API_KEY'),
-                    'api_secret' => env('CLOUDINARY_API_SECRET'),
-                ],
-                'url' => ['secure' => true],
-            ]);
-
-            $result = $cloudinary->uploadApi()->upload($file->getRealPath(), [
-                'folder' => self::CLOUDINARY_FOLDER,
-                'public_id' => $fileName,
-                'resource_type' => 'auto',
-            ]);
-
-            return $result['secure_url'];
-
-        } catch (\Exception $e) {
-            Log::error('Cloudinary upload error (Certificate)', [
-                'message' => $e->getMessage(),
-                'file' => $fileName,
-            ]);
-
-            throw new \Exception('Failed to upload to Cloudinary: '.$e->getMessage());
+        // Filter by category
+        if ($request->filled('category')) {
+            $query->byCategory($request->category);
         }
-    }
 
-    public function index()
-    {
-        $certificates = Certificate::with('tags')
-            ->latestIssued()
-            ->paginate(10)
-            ->through(fn ($cert) => [
+        $certificates = $query->paginate($request->get('per_page', 10))
+            ->through(fn($cert) => [
                 'id' => $cert->id,
                 'name' => $cert->name,
                 'issuer' => $cert->issuer,
@@ -63,32 +29,31 @@ class CertificateController extends Controller
                 'issued_year' => $cert->issued_year,
                 'credential_id' => $cert->credential_id,
                 'credential_url' => $cert->credential_url,
-                // Karena di DB sekarang tersimpan URL full, panggil langsung
-                'image_url' => $cert->image_url,
-
-                // Logic file type tetap sama
-                'file_type' => $this->getFileType($cert->image_url),
-
-                'tags' => $cert->tags->map(fn ($tag) => [
+                'image_url' => $cert->image_full_url,
+                'display_order' => $cert->display_order,
+                'category' => $cert->category,
+                'category_label' => $cert->category_label,
+                'category_color' => $cert->category_color,
+                'file_type' => $cert->image_url && str_ends_with(strtolower($cert->image_url), '.pdf') ? 'pdf' : 'image',
+                'tags' => $cert->tags->map(fn($tag) => [
                     'id' => $tag->id,
                     'name' => $tag->name,
-                    'slug' => $tag->slug,
                     'color' => $tag->color,
                 ]),
-                'created_at' => $cert->created_at->format('Y-m-d H:i:s'),
             ]);
 
         return Inertia::render('Admin/Certificate/Index', [
             'certificates' => $certificates,
+            'categoryOptions' => Certificate::getCategoryOptions(),
+            'filters' => [
+                'category' => $request->category,
+            ],
         ]);
     }
 
-    /**
-     * Show the form for creating a new certificate.
-     */
     public function create()
     {
-        $tags = Tag::orderBy('name')->get()->map(fn ($tag) => [
+        $availableTags = Tag::all()->map(fn($tag) => [
             'value' => $tag->id,
             'label' => $tag->name,
             'color' => $tag->color,
@@ -97,50 +62,53 @@ class CertificateController extends Controller
         return Inertia::render('Admin/Certificate/CertificateForm', [
             'typeForm' => 'create',
             'certificate' => null,
-            'availableTags' => $tags,
+            'availableTags' => $availableTags,
+            'categoryOptions' => Certificate::getCategoryOptions(),
         ]);
     }
 
-    /**
-     * Store a newly created certificate in storage.
-     */
-    public function store(StoreCertificateRequest $request)
+    public function store(Request $request)
     {
-        $data = $request->validated();
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'issuer' => 'required|string|max:255',
+            'issued_at' => 'required|date',
+            'credential_id' => 'nullable|string|max:255',
+            'credential_url' => 'nullable|url|max:500',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'tags' => 'nullable|array',
+            'tags.*' => 'exists:tags,id',
+            'category' => 'nullable|in:learning,competition',
+        ]);
 
-        // Upload image/PDF ke Cloudinary
+        $imageUrl = null;
         if ($request->hasFile('image')) {
-            $data['image_url'] = $this->uploadToCloudinary(
-                $request->file('image'),
-                str()->slug($request->name)
-            );
+            $imageUrl = $this->uploadToCloudinary($request->file('image'));
         }
 
-        // Simpan tags sementara
-        $tags = $data['tags'] ?? [];
-        unset($data['tags']);
+        $certificate = Certificate::create([
+            'name' => $validated['name'],
+            'issuer' => $validated['issuer'],
+            'issued_at' => $validated['issued_at'],
+            'credential_id' => $validated['credential_id'] ?? null,
+            'credential_url' => $validated['credential_url'] ?? null,
+            'image_url' => $imageUrl,
+            'category' => $validated['category'] ?? Certificate::CATEGORY_LEARNING,
+        ]);
 
-        // Create certificate
-        $certificate = Certificate::create($data);
-
-        // Attach tags
-        if (! empty($tags)) {
-            $certificate->tags()->attach($tags);
+        if (!empty($validated['tags'])) {
+            $certificate->tags()->sync($validated['tags']);
         }
 
-        return redirect()
-            ->route('admin.certificate.edit', $certificate->id)
-            ->with('success', 'Sertifikat berhasil ditambahkan!');
+        return redirect()->route('admin.certificate.index')
+            ->with('success', 'Certificate created successfully!');
     }
 
-    /**
-     * Show the form for editing the specified certificate.
-     */
     public function edit(Certificate $certificate)
     {
         $certificate->load('tags');
 
-        $tags = Tag::orderBy('name')->get()->map(fn ($tag) => [
+        $availableTags = Tag::all()->map(fn($tag) => [
             'value' => $tag->id,
             'label' => $tag->name,
             'color' => $tag->color,
@@ -155,138 +123,109 @@ class CertificateController extends Controller
                 'issued_at' => $certificate->issued_at->format('Y-m-d'),
                 'credential_id' => $certificate->credential_id,
                 'credential_url' => $certificate->credential_url,
-                'image_url' => $certificate->image_url, // URL Cloudinary
-
-                'file_type' => $this->getFileType($certificate->image_url),
-
+                'image_url' => $certificate->image_full_url,
+                'category' => $certificate->category,
                 'tags' => $certificate->tags->pluck('id')->toArray(),
             ],
-            'availableTags' => $tags,
+            'availableTags' => $availableTags,
+            'categoryOptions' => Certificate::getCategoryOptions(),
         ]);
     }
 
-    /**
-     * Update the specified certificate in storage.
-     */
-    public function update(UpdateCertificateRequest $request, Certificate $certificate)
+    public function update(Request $request, Certificate $certificate)
     {
-        $data = $request->validated();
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'issuer' => 'required|string|max:255',
+            'issued_at' => 'required|date',
+            'credential_id' => 'nullable|string|max:255',
+            'credential_url' => 'nullable|url|max:500',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,webp,pdf|max:10240',
+            'tags' => 'nullable|array',
+            'tags.*' => 'exists:tags,id',
+            'category' => 'nullable|in:learning,competition',
+        ]);
 
-        // Upload image/PDF baru kalau ada
+        $imageUrl = $certificate->image_url;
         if ($request->hasFile('image')) {
-            // 1. Hapus file lama di Cloudinary
-            $this->deleteFromCloudinary($certificate->image_url);
-
-            // 2. Upload file baru
-            $data['image_url'] = $this->uploadToCloudinary(
-                $request->file('image'),
-                str()->slug($request->name)
-            );
+            // Delete old image
+            if ($certificate->image_url) {
+                $this->deleteFromCloudinary($certificate->image_url);
+            }
+            $imageUrl = $this->uploadToCloudinary($request->file('image'));
         }
 
-        $tags = $data['tags'] ?? [];
-        unset($data['tags']);
+        $certificate->update([
+            'name' => $validated['name'],
+            'issuer' => $validated['issuer'],
+            'issued_at' => $validated['issued_at'],
+            'credential_id' => $validated['credential_id'] ?? null,
+            'credential_url' => $validated['credential_url'] ?? null,
+            'image_url' => $imageUrl,
+            'category' => $validated['category'] ?? $certificate->category,
+        ]);
 
-        $certificate->update($data);
-        $certificate->tags()->sync($tags);
+        $certificate->tags()->sync($validated['tags'] ?? []);
 
-        return redirect()
-            ->route('admin.certificate.edit', $certificate->id)
-            ->with('success', 'Sertifikat berhasil diupdate!');
+        return redirect()->route('admin.certificate.index')
+            ->with('success', 'Certificate updated successfully!');
     }
 
-    /**
-     * Remove the specified certificate from storage.
-     */
     public function destroy(Certificate $certificate)
     {
-        // Hapus file di Cloudinary
-        $this->deleteFromCloudinary($certificate->image_url);
-
         $certificate->delete();
-
-        return redirect()
-            ->route('admin.certificate.index')
-            ->with('success', 'Sertifikat berhasil dihapus!');
+        return redirect()->route('admin.certificate.index')
+            ->with('success', 'Certificate deleted successfully!');
     }
 
-    private function deleteFromCloudinary(?string $fullUrl): bool
+    // ✅ NEW: Reorder Certificates
+    public function reorder(Request $request)
     {
-        if (! $fullUrl || ! str_contains($fullUrl, 'cloudinary.com')) {
-            return false;
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.id' => 'required|exists:certificates,id',
+            'items.*.display_order' => 'required|integer|min:0',
+        ]);
+
+        foreach ($request->items as $item) {
+            Certificate::where('id', $item['id'])->update([
+                'display_order' => $item['display_order']
+            ]);
         }
 
+        return back()->with('success', 'Order updated successfully!');
+    }
+
+    // ==================== CLOUDINARY HELPERS ====================
+    private function uploadToCloudinary($file): ?string
+    {
         try {
-            $publicId = $this->getPublicIdFromUrl($fullUrl);
+            $options = ['folder' => 'certificates'];
+            
+            if ($file->getClientOriginalExtension() === 'pdf') {
+                $options['resource_type'] = 'raw';
+            }
 
-            if ($publicId) {
-                $cloudinary = new CloudinarySDK([
-                    'cloud' => [
-                        'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
-                        'api_key' => env('CLOUDINARY_API_KEY'),
-                        'api_secret' => env('CLOUDINARY_API_SECRET'),
-                    ],
-                ]);
+            $result = Cloudinary::upload($file->getRealPath(), $options);
+            return $result->getSecurePath();
+        } catch (\Exception $e) {
+            Log::error('Cloudinary upload failed: ' . $e->getMessage());
+            return null;
+        }
+    }
 
-                $cloudinary->uploadApi()->destroy($publicId);
-
-                return true;
+    private function deleteFromCloudinary(string $url): void
+    {
+        try {
+            $path = parse_url($url, PHP_URL_PATH);
+            if ($path && str_contains($path, 'certificates/')) {
+                preg_match('/(certificates\/[^\.]+)/', $path, $matches);
+                if (isset($matches[1])) {
+                    Cloudinary::destroy($matches[1]);
+                }
             }
         } catch (\Exception $e) {
-            Log::error('Cloudinary delete error (Certificate): '.$e->getMessage());
+            Log::error('Cloudinary delete failed: ' . $e->getMessage());
         }
-
-        return false;
-    }
-
-    private function getPublicIdFromUrl(string $url): ?string
-    {
-        // Cek apakah ini URL cloudinary
-        if (! str_contains($url, 'cloudinary.com')) {
-            return null;
-        }
-
-        // ✅ FIX: Add null check
-        $path = parse_url($url, PHP_URL_PATH);
-
-        if (! $path) {
-            Log::warning("Failed to parse Cloudinary URL: {$url}");
-
-            return null;
-        }
-
-        // Cari posisi folder project kita
-        $folderPos = strpos($path, self::CLOUDINARY_FOLDER);
-
-        if ($folderPos === false) {
-            return null;
-        }
-
-        // Ambil string mulai dari folder name
-        $relativePath = substr($path, $folderPos);
-
-        // Hilangkan extension
-        return pathinfo($relativePath, PATHINFO_DIRNAME).'/'.pathinfo($relativePath, PATHINFO_FILENAME);
-    }
-
-    /**
-     * Get file type (pdf atau image) dari file path.
-     */
-    private function getFileType(?string $filePath): string
-    {
-        if (! $filePath) {
-            return 'image';
-        }
-
-        // ✅ FIX: Add null check untuk parse_url
-        $parsedPath = parse_url($filePath, PHP_URL_PATH);
-
-        if (! $parsedPath) {
-            return 'image'; // Default ke image jika URL invalid
-        }
-
-        $extension = strtolower(pathinfo($parsedPath, PATHINFO_EXTENSION));
-
-        return $extension === 'pdf' ? 'pdf' : 'image';
     }
 }

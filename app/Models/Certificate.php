@@ -4,15 +4,16 @@ namespace App\Models;
 
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model; // Import Facade
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 
 class Certificate extends Model
 {
     use HasFactory;
 
-    // Hapus konstanta STORAGE_DISK karena kita pakai Cloudinary
-    // private const STORAGE_DISK = 'public';
+    // ✅ Category Constants
+    const CATEGORY_LEARNING = 'learning';
+    const CATEGORY_COMPETITION = 'competition';
 
     protected $fillable = [
         'name',
@@ -21,6 +22,8 @@ class Certificate extends Model
         'credential_id',
         'credential_url',
         'image_url',
+        'display_order',  // ✅ NEW
+        'category',       // ✅ NEW
     ];
 
     protected $casts = [
@@ -29,14 +32,73 @@ class Certificate extends Model
         'updated_at' => 'datetime',
     ];
 
-    // ==================== Relationships ====================
+    protected $appends = [
+        'category_label',
+        'category_color',
+    ];
 
+    // ==================== BOOT ====================
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($certificate) {
+            // Auto set display_order
+            if (empty($certificate->display_order)) {
+                $certificate->display_order = static::max('display_order') + 1;
+            }
+            
+            // Default category
+            if (empty($certificate->category)) {
+                $certificate->category = self::CATEGORY_LEARNING;
+            }
+        });
+
+        static::deleting(function ($certificate) {
+            if ($certificate->image_url) {
+                try {
+                    $path = parse_url($certificate->image_url, PHP_URL_PATH);
+                    if (!$path) return;
+
+                    if (str_contains($path, 'certificates/')) {
+                        preg_match('/(certificates\/[^\.]+)/', $path, $matches);
+                        if (isset($matches[1])) {
+                            Cloudinary::destroy($matches[1]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Gagal hapus gambar Cloudinary: ' . $e->getMessage());
+                }
+            }
+        });
+    }
+
+    // ==================== RELATIONSHIPS ====================
     public function tags()
     {
         return $this->belongsToMany(Tag::class)->withTimestamps();
     }
 
-    // ==================== Scopes ====================
+    // ==================== SCOPES ====================
+    public function scopeOrdered($query)
+    {
+        return $query->orderBy('display_order', 'asc');
+    }
+
+    public function scopeByCategory($query, string $category)
+    {
+        return $query->where('category', $category);
+    }
+
+    public function scopeLearning($query)
+    {
+        return $query->where('category', self::CATEGORY_LEARNING);
+    }
+
+    public function scopeCompetition($query)
+    {
+        return $query->where('category', self::CATEGORY_COMPETITION);
+    }
 
     public function scopeByIssuer($query, string $issuer)
     {
@@ -50,9 +112,7 @@ class Certificate extends Model
 
     public function scopeByTag($query, $tagId)
     {
-        return $query->whereHas('tags', function ($q) use ($tagId) {
-            $q->where('tags.id', $tagId);
-        });
+        return $query->whereHas('tags', fn($q) => $q->where('tags.id', $tagId));
     }
 
     public function scopeLatestIssued($query)
@@ -60,12 +120,7 @@ class Certificate extends Model
         return $query->orderBy('issued_at', 'desc');
     }
 
-    // ==================== Accessors ====================
-
-    /**
-     * Get full URL.
-     * Karena sekarang kita simpan full URL di DB, logic ini jadi simpel.
-     */
+    // ==================== ACCESSORS ====================
     public function getImageFullUrlAttribute(): ?string
     {
         return $this->image_url;
@@ -76,45 +131,35 @@ class Certificate extends Model
         return $this->issued_at->year;
     }
 
-    /**
-     * Check apakah ada gambar certificate.
-     */
-    public function hasImage(): bool
+    public function getCategoryLabelAttribute(): string
     {
-        return ! empty($this->image_url);
+        return match($this->category) {
+            self::CATEGORY_LEARNING => 'Learning',
+            self::CATEGORY_COMPETITION => 'Competition',
+            default => 'Other',
+        };
     }
 
-    // ==================== Events (Auto Delete Cloudinary) ====================
-
-    protected static function boot()
+    public function getCategoryColorAttribute(): string
     {
-        parent::boot();
+        return match($this->category) {
+            self::CATEGORY_LEARNING => 'blue',
+            self::CATEGORY_COMPETITION => 'gold',
+            default => 'default',
+        };
+    }
 
-        static::deleting(function ($certificate) {
-            if ($certificate->image_url) {
-                try {
-                    // ✅ FIX: Add null check untuk parse_url
-                    $path = parse_url($certificate->image_url, PHP_URL_PATH);
+    // ==================== HELPERS ====================
+    public function hasImage(): bool
+    {
+        return !empty($this->image_url);
+    }
 
-                    if (! $path) {
-                        Log::warning("Failed to parse URL on delete: {$certificate->image_url}");
-
-                        return;
-                    }
-
-                    // Logic untuk mengambil Public ID dari URL Cloudinary
-                    if (str_contains($path, 'certificates/')) {
-                        preg_match('/(certificates\/[^\.]+)/', $path, $matches);
-
-                        if (isset($matches[1])) {
-                            $publicId = $matches[1];
-                            Cloudinary::destroy($publicId);
-                        }
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Gagal hapus gambar Cloudinary saat delete certificate: '.$e->getMessage());
-                }
-            }
-        });
+    public static function getCategoryOptions(): array
+    {
+        return [
+            ['value' => self::CATEGORY_LEARNING, 'label' => 'Learning / Course'],
+            ['value' => self::CATEGORY_COMPETITION, 'label' => 'Competition / Award'],
+        ];
     }
 }

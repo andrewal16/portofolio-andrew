@@ -1,4 +1,5 @@
 import {
+    AppstoreOutlined,
     ArrowLeftOutlined,
     CloudUploadOutlined,
     DeleteOutlined,
@@ -73,7 +74,18 @@ const POPULAR_TECH = [
     'GraphQL',
 ];
 
-// ✅ Color mapping
+// ✅ PREDEFINED PROJECT TYPES
+const PROJECT_TYPES = [
+    { value: 'Web App', label: 'Web Application', color: 'blue' },
+    { value: 'Mobile', label: 'Mobile App', color: 'green' },
+    { value: 'Data Science', label: 'Data Science', color: 'purple' },
+    { value: 'AI', label: 'AI / Machine Learning', color: 'magenta' },
+    { value: 'Desktop', label: 'Desktop App', color: 'cyan' },
+    { value: 'API', label: 'API / Backend', color: 'orange' },
+    { value: 'Game', label: 'Game Development', color: 'red' },
+    { value: 'IoT', label: 'IoT / Embedded', color: 'geekblue' },
+];
+
 const techColors = {
     React: 'blue',
     'Vue.js': 'green',
@@ -88,17 +100,14 @@ const techColors = {
 };
 
 function ProjectForm() {
-    const { typeForm, project, errors, flash } = usePage().props;
-    console.log('ProjectForm Props:', { typeForm, project, errors, flash });
-    // ✅ Form Instance dari Ant Design (Source of Truth)
+    const { typeForm, project, availableTypes, errors, flash } =
+        usePage().props;
     const [form] = Form.useForm();
-
     const [thumbnailFile, setThumbnailFile] = useState(null);
     const [thumbnailPreview, setThumbnailPreview] = useState(
         project?.thumbnail_url || null,
     );
 
-    // Inertia useForm hook (Untuk pengiriman data)
     const { data, setData, processing } = useForm({
         title: project?.title || '',
         slug: project?.slug || '',
@@ -113,35 +122,22 @@ function ProjectForm() {
         technologies: [],
     });
 
-    // ✅ LOGIKA INISIALISASI DATA (FIXED)
     useEffect(() => {
         if (typeForm === 'edit' && project) {
-            // 1. Parsing Technologies dengan aman
             let fixedTechnologies = [];
-
             if (Array.isArray(project.technologies)) {
-                // Jika Laravel sudah mengembalikannya sebagai Array
                 fixedTechnologies = project.technologies;
             } else if (typeof project.technologies === 'string') {
-                // Jika Database menyimpan: ["React","Vue.js"]
                 try {
-                    // Bersihkan tanda kutip ganda yang berlebihan jika ada (defensive)
-                    const rawString = project.technologies;
-
-                    // Coba parse JSON standard
-                    fixedTechnologies = JSON.parse(rawString);
-
-                    // Pengecekan double-encoded (kasus string di dalam string)
+                    fixedTechnologies = JSON.parse(project.technologies);
                     if (typeof fixedTechnologies === 'string') {
                         fixedTechnologies = JSON.parse(fixedTechnologies);
                     }
                 } catch (e) {
-                    console.error('Gagal parsing technologies:', e);
                     fixedTechnologies = [];
                 }
             }
 
-            // 2. Set nilai ke Form Ant Design
             form.setFieldsValue({
                 ...project,
                 started_at: project.started_at
@@ -150,20 +146,17 @@ function ProjectForm() {
                 finished_at: project.finished_at
                     ? dayjs(project.finished_at)
                     : null,
-                technologies: fixedTechnologies, // ✅ Array murni masuk ke sini
+                technologies: fixedTechnologies,
             });
 
-            // 3. Set Preview Thumbnail
             setThumbnailPreview(project.thumbnail_url);
         }
     }, [typeForm, project, form]);
 
-    // Handle Flash Message
     useEffect(() => {
         if (flash?.success) message.success(flash.success);
         if (errors && Object.keys(errors).length > 0) {
-            message.error('Harap periksa inputan Anda.');
-            // Opsional: highlight field yang error di form ant design
+            message.error('Please check your inputs.');
             const formErrors = Object.keys(errors).map((key) => ({
                 name: key,
                 errors: [errors[key]],
@@ -172,9 +165,7 @@ function ProjectForm() {
         }
     }, [flash, errors, form]);
 
-    // ✅ Sinkronisasi Form AntD -> State Inertia
-    // Ini menggantikan onChange manual di setiap input
-    const handleValuesChange = (changedValues, allValues) => {
+    const handleValuesChange = (changedValues) => {
         Object.keys(changedValues).forEach((key) => {
             setData(key, changedValues[key]);
         });
@@ -187,7 +178,7 @@ function ProjectForm() {
         reader.onload = (e) => setThumbnailPreview(e.target.result);
         reader.readAsDataURL(file);
         setThumbnailFile(file);
-        setData('thumbnail', file); // Sync ke Inertia
+        setData('thumbnail', file);
     };
 
     const handleRemoveThumbnail = (e) => {
@@ -199,13 +190,12 @@ function ProjectForm() {
 
     const handleTitleChange = (e) => {
         const value = e.target.value;
-        // Auto Slug Logic
         if (typeForm === 'create' || !form.getFieldValue('slug')) {
             const slug = value
                 .toLowerCase()
                 .replace(/ /g, '-')
                 .replace(/[^\w-]+/g, '');
-            form.setFieldsValue({ slug: slug });
+            form.setFieldsValue({ slug });
             setData('slug', slug);
         }
     };
@@ -222,7 +212,6 @@ function ProjectForm() {
                     );
                 }
             } else if (key === 'technologies') {
-                // ✅ Ubah Array kembali ke JSON String untuk dikirim ke Backend
                 const techArray = values[key] || [];
                 formData.append(key, JSON.stringify(techArray));
             } else if (values[key] !== undefined && values[key] !== null) {
@@ -253,6 +242,14 @@ function ProjectForm() {
         }
     };
 
+    // ✅ Combine predefined types with existing custom types
+    const allTypeOptions = [
+        ...PROJECT_TYPES,
+        ...(availableTypes || [])
+            .filter((t) => !PROJECT_TYPES.find((pt) => pt.value === t))
+            .map((t) => ({ value: t, label: t, color: 'default' })),
+    ];
+
     return (
         <AppLayout
             header={typeForm === 'create' ? 'Create Project' : 'Edit Project'}
@@ -261,11 +258,11 @@ function ProjectForm() {
                 form={form}
                 layout="vertical"
                 onFinish={handleSubmit}
-                onValuesChange={handleValuesChange} // ✅ Sinkronisasi otomatis di sini
+                onValuesChange={handleValuesChange}
                 initialValues={{ status: 'ongoing', technologies: [] }}
                 requiredMark="optional"
             >
-                {/* Header Action Bar */}
+                {/* Header Actions */}
                 <div className="mb-6 flex items-center justify-between">
                     <Button
                         icon={<ArrowLeftOutlined />}
@@ -275,19 +272,17 @@ function ProjectForm() {
                     >
                         Back
                     </Button>
-                    <Space>
-                        <Button
-                            type="primary"
-                            htmlType="submit"
-                            icon={<SaveOutlined />}
-                            loading={processing}
-                            size="large"
-                        >
-                            {typeForm === 'create'
-                                ? 'Publish Project'
-                                : 'Save Changes'}
-                        </Button>
-                    </Space>
+                    <Button
+                        type="primary"
+                        htmlType="submit"
+                        icon={<SaveOutlined />}
+                        loading={processing}
+                        size="large"
+                    >
+                        {typeForm === 'create'
+                            ? 'Publish Project'
+                            : 'Save Changes'}
+                    </Button>
                 </div>
 
                 <Row gutter={24} align="top" className="!pb-3">
@@ -307,7 +302,7 @@ function ProjectForm() {
                                 <Input
                                     size="large"
                                     placeholder="Enter project name"
-                                    onChange={handleTitleChange} // Khusus title karena ada logika slug
+                                    onChange={handleTitleChange}
                                 />
                             </Form.Item>
 
@@ -338,7 +333,52 @@ function ProjectForm() {
                                 />
                             </Form.Item>
 
-                            {/* ✅ TECHNOLOGIES FIELD (BERSIH & FIXED) */}
+                            {/* ✅ PROJECT TYPE - IMPROVED */}
+                            <Form.Item
+                                label={
+                                    <Space>
+                                        <AppstoreOutlined />
+                                        <span>Project Type</span>
+                                    </Space>
+                                }
+                                name="type"
+                                extra="Select or type a custom category for filtering"
+                            >
+                                <Select
+                                    size="large"
+                                    placeholder="Select or enter project type"
+                                    mode="tags"
+                                    maxCount={1}
+                                    tokenSeparators={[',']}
+                                    style={{ width: '100%' }}
+                                    onChange={(values) => {
+                                        // Only keep the last selected value
+                                        const value =
+                                            values.length > 0
+                                                ? values[values.length - 1]
+                                                : '';
+                                        form.setFieldValue('type', value);
+                                    }}
+                                    value={
+                                        form.getFieldValue('type')
+                                            ? [form.getFieldValue('type')]
+                                            : []
+                                    }
+                                >
+                                    {allTypeOptions.map((opt) => (
+                                        <Select.Option
+                                            key={opt.value}
+                                            value={opt.value}
+                                        >
+                                            <Tag color={opt.color}>
+                                                {opt.label}
+                                            </Tag>
+                                        </Select.Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+
+                            {/* Technologies */}
                             <Form.Item
                                 label={
                                     <Space>
@@ -351,15 +391,13 @@ function ProjectForm() {
                                 <Select
                                     mode="tags"
                                     size="large"
-                                    placeholder="Contoh: React, Laravel..."
+                                    placeholder="e.g., React, Laravel..."
                                     style={{ width: '100%' }}
                                     tokenSeparators={[',']}
                                     options={POPULAR_TECH.map((t) => ({
                                         label: t,
                                         value: t,
                                     }))}
-                                    // ❌ Hapus value={...} dan onChange={...} manual
-                                    // Biarkan Form.Item yang mengontrolnya
                                     tagRender={(props) => (
                                         <Tag
                                             color={
@@ -410,7 +448,7 @@ function ProjectForm() {
                         </Card>
                     </Col>
 
-                    {/* KOLOM KANAN: SIDEBAR META DATA */}
+                    {/* Sidebar */}
                     <Col xs={24} lg={8}>
                         <Card
                             className="!mb-6 shadow-sm"
@@ -425,7 +463,6 @@ function ProjectForm() {
                                     beforeUpload={() => false}
                                     onChange={handleThumbnailChange}
                                     accept="image/png, image/jpeg, image/jpg, image/webp"
-                                    className="border-2 border-dashed border-gray-300 bg-gray-50 transition-colors hover:border-blue-500"
                                     style={{
                                         padding: '0px',
                                         overflow: 'hidden',
@@ -438,16 +475,16 @@ function ProjectForm() {
                                                 alt="thumbnail"
                                                 className="h-full w-full object-cover"
                                             />
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
                                                 <CloudUploadOutlined className="mb-2 text-3xl text-white" />
-                                                <Text className="font-medium text-white">
+                                                <Text className="text-white">
                                                     Click to Change
                                                 </Text>
                                                 <Button
                                                     type="text"
                                                     danger
                                                     icon={<DeleteOutlined />}
-                                                    className="mt-4 bg-white/10 text-white hover:bg-white/20"
+                                                    className="mt-4 bg-white/10 text-white"
                                                     onClick={
                                                         handleRemoveThumbnail
                                                     }
@@ -464,7 +501,7 @@ function ProjectForm() {
                                                 />
                                             </p>
                                             <p className="ant-upload-text">
-                                                Click or drag file to this area
+                                                Click or drag file to upload
                                             </p>
                                             <p className="ant-upload-hint text-xs text-gray-400">
                                                 Recommended: 1200x630px, Max 2MB
@@ -519,10 +556,6 @@ function ProjectForm() {
                             </Form.Item>
 
                             <Divider style={{ margin: '12px 0' }} />
-
-                            <Form.Item label="Project Type" name="type">
-                                <Input placeholder="e.g. Web App, Mobile App" />
-                            </Form.Item>
 
                             <Form.Item
                                 label="Timeline"

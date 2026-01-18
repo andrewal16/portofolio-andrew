@@ -1,8 +1,11 @@
 import {
+    AppstoreOutlined,
     ArrowRightOutlined,
+    BookOutlined,
     CalendarOutlined,
     CloseOutlined,
     CodeOutlined,
+    DatabaseOutlined,
     DownloadOutlined,
     FileOutlined,
     GithubOutlined,
@@ -23,7 +26,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { TextPlugin } from 'gsap/TextPlugin';
 import { useEffect, useRef, useState } from 'react';
- import { BackgroundGradientAnimation } from '../../../../components/ui/background-gradient-animation';
+import { BackgroundGradientAnimation } from '../../../../components/ui/background-gradient-animation';
 import PageLoader from './PageLoader';
 
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
@@ -31,18 +34,35 @@ gsap.registerPlugin(ScrollTrigger, TextPlugin);
 export default function PortfolioIndex({
     profile,
     projects,
+    projectTypes,
     certificates,
     recent_blogs,
     experiences,
 }) {
     const { flash } = usePage().props;
     const [isLoading, setIsLoading] = useState(true);
+
+    // ========== PROJECTS STATE ==========
+    const [projectList, setProjectList] = useState(projects.data || []);
+    const [projectNextPage, setProjectNextPage] = useState(
+        projects.next_page_url,
+    );
+    const [activeProjectType, setActiveProjectType] = useState('all');
+    const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+    const [isLoadingMoreProjects, setIsLoadingMoreProjects] = useState(false);
+
+    // ========== CERTIFICATES STATE ==========
+    const [certList, setCertList] = useState(certificates.data || []);
+    const [certNextPage, setCertNextPage] = useState(
+        certificates.next_page_url,
+    );
+    const [activeCertCategory, setActiveCertCategory] = useState('all');
+    const [isLoadingCerts, setIsLoadingCerts] = useState(false);
+    const [isLoadingMoreCerts, setIsLoadingMoreCerts] = useState(false);
     const [previewCert, setPreviewCert] = useState(null);
     const [pdfError, setPdfError] = useState(false);
-    const [projectList, setProjectList] = useState(projects.data || []);
-    const [nextPageUrl, setNextPageUrl] = useState(projects.next_page_url);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+    // ========== CONTACT FORM ==========
     const { data, setData, post, processing, reset, errors } = useForm({
         name: '',
         email: '',
@@ -50,6 +70,7 @@ export default function PortfolioIndex({
         message: '',
     });
 
+    // ========== REFS ==========
     const containerRef = useRef(null);
     const cursorRef = useRef(null);
     const textRef = useRef(null);
@@ -58,6 +79,7 @@ export default function PortfolioIndex({
     const bioSectionRef = useRef(null);
     const bioStatsRef = useRef(null);
 
+    // ========== CONSTANTS ==========
     const roles = ['Web Developer', 'Data Scientist', 'Creative Coder'];
     const techStack = [
         'Laravel',
@@ -84,20 +106,49 @@ export default function PortfolioIndex({
     ];
     const stats = profile.stats || defaultStats;
 
+    // ========== PROJECT TYPE ICONS ==========
+    const projectTypeIcons = {
+        'Web App': <CodeOutlined />,
+        'Data Science': <DatabaseOutlined />,
+        AI: <RocketOutlined />,
+        Mobile: <AppstoreOutlined />,
+    };
+
+    // ========== PROJECT TABS CONFIG ==========
+    const projectTabs = [
+        { key: 'all', label: 'All Projects', icon: <AppstoreOutlined /> },
+        ...(projectTypes || []).map((type) => ({
+            key: type,
+            label: type,
+            icon: projectTypeIcons[type] || <CodeOutlined />,
+        })),
+    ];
+
+    // ========== CERTIFICATE TABS CONFIG ==========
+    const certTabs = [
+        { key: 'all', label: 'All', icon: <SafetyCertificateOutlined /> },
+        { key: 'learning', label: 'Learning', icon: <BookOutlined /> },
+        { key: 'competition', label: 'Competition', icon: <TrophyOutlined /> },
+    ];
+
+    // ========== PDF HELPERS ==========
     const isPDF = (url) => url && url.toLowerCase().endsWith('.pdf');
+
     const getPDFThumbnail = (pdfUrl) => {
         if (!pdfUrl || !pdfUrl.includes('cloudinary.com')) return null;
         const urlParts = pdfUrl.split('/upload/');
-        if (urlParts.length === 2)
+        if (urlParts.length === 2) {
             return (
                 urlParts[0] +
                 '/upload/pg_1,w_600,h_400,c_fill,f_jpg,q_auto/' +
                 urlParts[1]
             );
+        }
         return null;
     };
-    const getCertificateThumbnail = (cert) =>
-        isPDF(cert.image) ? getPDFThumbnail(cert.image) : cert.image;
+
+    const getCertThumbnail = (cert) =>
+        cert.is_pdf ? getPDFThumbnail(cert.image) : cert.image;
 
     const handleDownloadPDF = (url, filename) => {
         try {
@@ -119,6 +170,167 @@ export default function PortfolioIndex({
         }
     };
 
+    // ========== PROJECT HANDLERS ==========
+    const handleProjectTypeChange = async (type) => {
+        setActiveProjectType(type);
+        setIsLoadingProjects(true);
+
+        try {
+            const params = new URLSearchParams();
+            if (type !== 'all') params.append('type', type);
+            params.append('per_page', '6');
+
+            const res = await fetch(
+                `/api/portfolio/projects?${params.toString()}`,
+                {
+                    headers: { Accept: 'application/json' },
+                },
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                setProjectList(data.data || []);
+                setProjectNextPage(data.next_page_url);
+
+                setTimeout(() => {
+                    gsap.fromTo(
+                        '.project-card',
+                        { opacity: 0, y: 30 },
+                        {
+                            opacity: 1,
+                            y: 0,
+                            stagger: 0.1,
+                            duration: 0.5,
+                            ease: 'power2.out',
+                        },
+                    );
+                }, 100);
+            }
+        } catch (err) {
+            message.error('Failed to load projects');
+        } finally {
+            setIsLoadingProjects(false);
+        }
+    };
+
+    const handleLoadMoreProjects = async () => {
+        if (!projectNextPage || isLoadingMoreProjects) return;
+        setIsLoadingMoreProjects(true);
+
+        try {
+            const res = await fetch(projectNextPage, {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const newProjects = data.data || [];
+                setProjectList((prev) => [...prev, ...newProjects]);
+                setProjectNextPage(data.next_page_url);
+
+                setTimeout(() => {
+                    gsap.fromTo(
+                        '.project-card:nth-last-child(-n+' +
+                            newProjects.length +
+                            ')',
+                        { opacity: 0, y: 30 },
+                        { opacity: 1, y: 0, stagger: 0.1, duration: 0.5 },
+                    );
+                }, 100);
+            }
+        } catch (err) {
+            message.error('Failed to load more projects');
+        } finally {
+            setIsLoadingMoreProjects(false);
+        }
+    };
+
+    // ========== CERTIFICATE HANDLERS ==========
+    const handleCertCategoryChange = async (category) => {
+        setActiveCertCategory(category);
+        setIsLoadingCerts(true);
+
+        try {
+            const params = new URLSearchParams();
+            if (category !== 'all') params.append('category', category);
+            params.append('per_page', '6');
+
+            const res = await fetch(
+                `/api/portfolio/certificates?${params.toString()}`,
+                {
+                    headers: { Accept: 'application/json' },
+                },
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                setCertList(data.data || []);
+                setCertNextPage(data.next_page_url);
+
+                setTimeout(() => {
+                    gsap.fromTo(
+                        '.cert-card',
+                        { opacity: 0, y: 30 },
+                        {
+                            opacity: 1,
+                            y: 0,
+                            stagger: 0.1,
+                            duration: 0.5,
+                            ease: 'power2.out',
+                        },
+                    );
+                }, 100);
+            }
+        } catch (err) {
+            message.error('Failed to load certificates');
+        } finally {
+            setIsLoadingCerts(false);
+        }
+    };
+
+    const handleLoadMoreCerts = async () => {
+        if (!certNextPage || isLoadingMoreCerts) return;
+        setIsLoadingMoreCerts(true);
+
+        try {
+            const res = await fetch(certNextPage, {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const newCerts = data.data || [];
+                setCertList((prev) => [...prev, ...newCerts]);
+                setCertNextPage(data.next_page_url);
+
+                setTimeout(() => {
+                    gsap.fromTo(
+                        '.cert-card:nth-last-child(-n+' + newCerts.length + ')',
+                        { opacity: 0, y: 30 },
+                        { opacity: 1, y: 0, stagger: 0.1, duration: 0.5 },
+                    );
+                }, 100);
+            }
+        } catch (err) {
+            message.error('Failed to load more certificates');
+        } finally {
+            setIsLoadingMoreCerts(false);
+        }
+    };
+
+    // ========== CONTACT HANDLER ==========
+    const handleContactSubmit = () => {
+        post(route('contact.send'), {
+            onSuccess: () => {
+                reset();
+                message.success('Message sent successfully!');
+            },
+            onError: () =>
+                message.error('Please check your inputs and try again.'),
+        });
+    };
+
+    // ========== GSAP ANIMATIONS ==========
     useEffect(() => {
         const ctx = gsap.context(() => {
             const tl = gsap.timeline({
@@ -185,7 +397,6 @@ export default function PortfolioIndex({
                 });
             });
 
-            // Bio Section Animations
             gsap.from('.bio-reveal', {
                 scrollTrigger: {
                     trigger: bioSectionRef.current,
@@ -210,6 +421,7 @@ export default function PortfolioIndex({
                 ease: 'back.out(1.7)',
             });
         }, containerRef);
+
         return () => ctx.revert();
     }, []);
 
@@ -250,50 +462,7 @@ export default function PortfolioIndex({
         }
     }, [flash?.success]);
 
-    const handleLoadMore = async () => {
-        if (!nextPageUrl) return;
-        setIsLoadingMore(true);
-        try {
-            const res = await fetch(nextPageUrl, {
-                headers: { Accept: 'application/json' },
-            });
-            if (res.ok) {
-                const json = await res.json();
-                setProjectList((prev) => [
-                    ...prev,
-                    ...(json.data || json.projects?.data || []),
-                ]);
-                setNextPageUrl(
-                    json.next_page_url || json.projects?.next_page_url,
-                );
-                setTimeout(
-                    () =>
-                        gsap.fromTo(
-                            '.project-card-new',
-                            { opacity: 0, y: 30 },
-                            { opacity: 1, y: 0, stagger: 0.1 },
-                        ),
-                    100,
-                );
-            }
-        } catch (err) {
-            message.error('Failed to load more projects');
-        } finally {
-            setIsLoadingMore(false);
-        }
-    };
-
-    const handleContactSubmit = () => {
-        post(route('contact.send'), {
-            onSuccess: () => {
-                reset();
-                message.success('Message sent successfully!');
-            },
-            onError: () =>
-                message.error('Please check your inputs and try again.'),
-        });
-    };
-
+    // ========== RENDER ==========
     return (
         <div
             ref={containerRef}
@@ -302,7 +471,7 @@ export default function PortfolioIndex({
             <Head title={`Portfolio - ${profile.name}`} />
             <PageLoader />
 
-            {/* SPLASH SCREEN */}
+            {/* ==================== SPLASH SCREEN ==================== */}
             <div className="splash-screen fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#020617]">
                 <div className="splash-content w-full max-w-md px-6 text-center">
                     <div className="mb-2 flex justify-between">
@@ -317,7 +486,7 @@ export default function PortfolioIndex({
                 </div>
             </div>
 
-            {/* ANIMATED BACKGROUND */}
+            {/* ==================== ANIMATED BACKGROUND ==================== */}
             <BackgroundGradientAnimation
                 gradientBackgroundStart="rgb(2, 6, 23)"
                 gradientBackgroundEnd="rgb(15, 23, 42)"
@@ -340,7 +509,7 @@ export default function PortfolioIndex({
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(2,6,23,0.4)_100%)]"></div>
             </div>
 
-            {/* NAVBAR */}
+            {/* ==================== NAVBAR ==================== */}
             <nav className="fixed z-50 flex w-full items-center justify-between border-b border-white/5 bg-[#020617]/70 px-6 py-6 backdrop-blur-md">
                 <div className="text-xl font-bold tracking-widest text-white">
                     {profile.name.split(' ')[0]}
@@ -354,7 +523,7 @@ export default function PortfolioIndex({
                 </a>
             </nav>
 
-            {/* HERO */}
+            {/* ==================== HERO SECTION ==================== */}
             <section className="relative z-10 flex min-h-screen items-center justify-center px-6 pt-20">
                 <div className="grid w-full max-w-7xl items-center gap-12 lg:grid-cols-2">
                     <div className="order-2 space-y-6 lg:order-1">
@@ -398,7 +567,7 @@ export default function PortfolioIndex({
                                 href="#"
                                 className="flex items-center gap-2 rounded-full border border-slate-700 px-8 py-3 text-slate-300 hover:border-white hover:text-white"
                             >
-                                <DownloadOutlined /> Resume
+                                Resume
                             </a>
                         </div>
                     </div>
@@ -417,7 +586,7 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* TECH MARQUEE */}
+            {/* ==================== TECH MARQUEE ==================== */}
             <section className="relative z-10 overflow-hidden border-y border-white/5 bg-[#020617]/50 py-8 backdrop-blur-sm">
                 <div className="flex whitespace-nowrap" ref={marqueeRef}>
                     {infiniteTech.map((t, i) => (
@@ -432,7 +601,7 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* ✨ NEW: ABOUT ME / BIO SECTION */}
+            {/* ==================== ABOUT ME / BIO SECTION ==================== */}
             <section
                 ref={bioSectionRef}
                 className="relative z-10 overflow-hidden border-b border-white/5 bg-gradient-to-b from-[#020617] via-[#0a101f] to-[#020617] px-6 py-32"
@@ -457,7 +626,6 @@ export default function PortfolioIndex({
                     </div>
 
                     <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-12">
-                        {/* Left: Visual Card */}
                         <div className="bio-reveal lg:col-span-5">
                             <div className="relative mx-auto max-w-md lg:mx-0">
                                 <div className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-8 backdrop-blur-xl transition-all duration-500 hover:border-cyan-500/30 hover:shadow-[0_0_60px_rgba(6,182,212,0.15)]">
@@ -526,7 +694,6 @@ export default function PortfolioIndex({
                             </div>
                         </div>
 
-                        {/* Right: Content */}
                         <div className="space-y-8 lg:col-span-7">
                             <div className="bio-reveal">
                                 <h2 className="mb-4 text-4xl leading-tight font-bold text-white md:text-5xl lg:text-6xl">
@@ -599,7 +766,7 @@ export default function PortfolioIndex({
                 <style>{`@keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }`}</style>
             </section>
 
-            {/* ⭐ EXPERIENCE TIMELINE - NOW SECTION 01 */}
+            {/* ==================== EXPERIENCE TIMELINE ==================== */}
             <section
                 id="experience"
                 className="relative z-10 border-b border-white/5 bg-[#020617]/90 px-6 py-32 backdrop-blur-sm"
@@ -673,7 +840,18 @@ export default function PortfolioIndex({
                                                 </div>
                                                 <div className="flex flex-wrap gap-3 font-mono text-xs">
                                                     <span
-                                                        className={`flex items-center gap-1.5 rounded border px-2.5 py-1 ${exp.employment_type_color === 'green' ? 'border-green-500/30 bg-green-500/10 text-green-400' : exp.employment_type_color === 'cyan' ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' : exp.employment_type_color === 'purple' ? 'border-purple-500/30 bg-purple-500/10 text-purple-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}
+                                                        className={`flex items-center gap-1.5 rounded border px-2.5 py-1 ${
+                                                            exp.employment_type_color ===
+                                                            'green'
+                                                                ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                                                                : exp.employment_type_color ===
+                                                                    'cyan'
+                                                                  ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400'
+                                                                  : exp.employment_type_color ===
+                                                                      'purple'
+                                                                    ? 'border-purple-500/30 bg-purple-500/10 text-purple-400'
+                                                                    : 'border-blue-500/30 bg-blue-500/10 text-blue-400'
+                                                        }`}
                                                     >
                                                         {
                                                             exp.employment_type_label
@@ -738,7 +916,7 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* PROJECTS SECTION - NOW SECTION 02 */}
+            {/* ==================== PROJECTS SECTION WITH TABS ==================== */}
             <section id="projects" className="relative z-10 px-6 py-32">
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-16 flex flex-col items-end justify-between gap-4 md:flex-row">
@@ -753,77 +931,147 @@ export default function PortfolioIndex({
                         <div className="h-[1px] flex-grow bg-slate-800 md:mx-8"></div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-                        {projectList.map((project, idx) => (
-                            <Link
-                                href={route(
-                                    'portfolio.project.show',
-                                    project.slug,
-                                )}
-                                key={`${project.id}-${idx}`}
-                                className={`project-card ${idx >= (projects.data?.length || 0) ? 'project-card-new' : ''} reveal-section group relative block flex h-[420px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40 transition-all duration-500 hover:border-cyan-500/50 hover:shadow-[0_0_30px_rgba(6,182,212,0.15)]`}
+                    {/* PROJECT TYPE TABS */}
+                    <div className="reveal-section mb-12 flex flex-wrap justify-center gap-3">
+                        {projectTabs.map((tab) => (
+                            <button
+                                key={tab.key}
+                                onClick={() => handleProjectTypeChange(tab.key)}
+                                disabled={isLoadingProjects}
+                                className={`group relative flex items-center gap-2 rounded-full border px-6 py-3 font-mono text-sm transition-all duration-300 ${
+                                    activeProjectType === tab.key
+                                        ? 'border-cyan-500 bg-cyan-500/20 text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]'
+                                        : 'border-white/10 text-slate-400 hover:border-cyan-500/50 hover:bg-white/5 hover:text-white'
+                                }`}
                             >
-                                <div className="relative h-[55%] overflow-hidden">
-                                    <div className="absolute inset-0 z-10 bg-slate-900/20 transition-colors group-hover:bg-slate-900/0"></div>
-                                    <img
-                                        src={project.image}
-                                        alt={project.title}
-                                        className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:rotate-1"
-                                    />
-                                    <div className="absolute top-4 right-4 z-20">
-                                        <span className="rounded-full border border-white/10 bg-black/60 px-3 py-1 font-mono text-xs text-cyan-400 backdrop-blur-md">
-                                            {project.type || 'Web App'}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="relative z-20 flex h-[45%] flex-col bg-gradient-to-b from-[#0f172a] to-[#020617] p-6">
-                                    <div className="mb-2 flex items-start justify-between">
-                                        <h3 className="text-xl font-bold text-white transition-colors group-hover:text-cyan-400">
-                                            {project.title}
-                                        </h3>
-                                        <ArrowRightOutlined className="-translate-x-4 text-slate-500 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
-                                    </div>
-                                    <p className="mb-4 line-clamp-2 font-['Inter'] text-sm text-slate-400">
-                                        {project.description}
-                                    </p>
-                                    <div className="mt-auto flex flex-wrap gap-2">
-                                        {project.technologies
-                                            ?.slice(0, 3)
-                                            .map((t, i) => (
-                                                <span
-                                                    key={i}
-                                                    className="rounded bg-white/5 px-2 py-1 text-[10px] font-bold text-slate-500 uppercase"
-                                                >
-                                                    {t}
-                                                </span>
-                                            ))}
-                                    </div>
-                                </div>
-                            </Link>
+                                <span
+                                    className={
+                                        activeProjectType === tab.key
+                                            ? 'text-cyan-400'
+                                            : 'text-slate-500'
+                                    }
+                                >
+                                    {tab.icon}
+                                </span>
+                                <span>{tab.label}</span>
+                                {activeProjectType === tab.key && (
+                                    <span className="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-cyan-400"></span>
+                                )}
+                            </button>
                         ))}
                     </div>
 
-                    {nextPageUrl && (
-                        <div className="reveal-section mt-16 text-center">
-                            <button
-                                onClick={handleLoadMore}
-                                disabled={isLoadingMore}
-                                className="group relative inline-flex items-center gap-3 border border-cyan-500/30 px-8 py-3 font-mono text-sm tracking-widest text-cyan-400 uppercase transition-all hover:bg-cyan-500/10 disabled:opacity-50"
-                            >
-                                {isLoadingMore ? (
-                                    <LoadingOutlined className="animate-spin" />
-                                ) : (
-                                    <span>Load More Projects</span>
-                                )}
-                                <span className="absolute top-0 left-0 h-2 w-2 border-t border-l border-cyan-500"></span>
-                                <span className="absolute right-0 bottom-0 h-2 w-2 border-r border-b border-cyan-500"></span>
-                            </button>
+                    {/* PROJECTS LOADING */}
+                    {isLoadingProjects ? (
+                        <div className="flex h-64 items-center justify-center">
+                            <div className="flex flex-col items-center gap-4">
+                                <LoadingOutlined
+                                    className="text-4xl text-cyan-500"
+                                    spin
+                                />
+                                <span className="font-mono text-sm text-slate-500">
+                                    Loading projects...
+                                </span>
+                            </div>
                         </div>
+                    ) : (
+                        <>
+                            {/* PROJECT GRID */}
+                            <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                                {projectList.map((project, idx) => (
+                                    <Link
+                                        href={route(
+                                            'portfolio.project.show',
+                                            project.slug,
+                                        )}
+                                        key={`${project.id}-${idx}`}
+                                        className="project-card group relative block flex h-[420px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40 transition-all duration-500 hover:border-cyan-500/50 hover:shadow-[0_0_30px_rgba(6,182,212,0.15)]"
+                                    >
+                                        <div className="relative h-[55%] overflow-hidden">
+                                            <div className="absolute inset-0 z-10 bg-slate-900/20 transition-colors group-hover:bg-slate-900/0"></div>
+                                            <img
+                                                src={project.image}
+                                                alt={project.title}
+                                                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:rotate-1"
+                                            />
+                                            <div className="absolute top-4 right-4 z-20">
+                                                <span className="rounded-full border border-white/10 bg-black/60 px-3 py-1 font-mono text-xs text-cyan-400 backdrop-blur-md">
+                                                    {project.type || 'Project'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="relative z-20 flex h-[45%] flex-col bg-gradient-to-b from-[#0f172a] to-[#020617] p-6">
+                                            <div className="mb-2 flex items-start justify-between">
+                                                <h3 className="text-xl font-bold text-white transition-colors group-hover:text-cyan-400">
+                                                    {project.title}
+                                                </h3>
+                                                <ArrowRightOutlined className="-translate-x-4 text-slate-500 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+                                            </div>
+                                            <p className="mb-4 line-clamp-2 font-['Inter'] text-sm text-slate-400">
+                                                {project.description}
+                                            </p>
+                                            <div className="mt-auto flex flex-wrap gap-2">
+                                                {project.technologies
+                                                    ?.slice(0, 3)
+                                                    .map((t, i) => (
+                                                        <span
+                                                            key={i}
+                                                            className="rounded bg-white/5 px-2 py-1 text-[10px] font-bold text-slate-500 uppercase"
+                                                        >
+                                                            {t}
+                                                        </span>
+                                                    ))}
+                                                {project.technologies?.length >
+                                                    3 && (
+                                                    <span className="rounded bg-white/5 px-2 py-1 text-[10px] text-slate-600">
+                                                        +
+                                                        {project.technologies
+                                                            .length - 3}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+
+                            {/* EMPTY STATE */}
+                            {projectList.length === 0 && (
+                                <div className="py-16 text-center">
+                                    <CodeOutlined className="mb-4 text-5xl text-slate-700" />
+                                    <p className="font-mono text-slate-500">
+                                        No projects found for this category.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* LOAD MORE PROJECTS */}
+                            {projectNextPage && (
+                                <div className="mt-16 text-center">
+                                    <button
+                                        onClick={handleLoadMoreProjects}
+                                        disabled={isLoadingMoreProjects}
+                                        className="group relative inline-flex items-center gap-3 border border-cyan-500/30 px-8 py-3 font-mono text-sm tracking-widest text-cyan-400 uppercase transition-all hover:bg-cyan-500/10 disabled:opacity-50"
+                                    >
+                                        {isLoadingMoreProjects ? (
+                                            <>
+                                                <LoadingOutlined spin />
+                                                <span>Loading...</span>
+                                            </>
+                                        ) : (
+                                            <span>Load More Projects</span>
+                                        )}
+                                        <span className="absolute top-0 left-0 h-2 w-2 border-t border-l border-cyan-500"></span>
+                                        <span className="absolute right-0 bottom-0 h-2 w-2 border-r border-b border-cyan-500"></span>
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </section>
 
-            {/* CERTIFICATES - NOW SECTION 03 */}
+            {/* ==================== CERTIFICATES SECTION WITH TABS ==================== */}
             <section className="relative z-10 border-y border-white/5 bg-[#0a0f1e]/80 px-6 py-32 backdrop-blur-sm">
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-12 flex items-center gap-4">
@@ -832,67 +1080,166 @@ export default function PortfolioIndex({
                         </span>
                         <div className="h-[1px] flex-grow bg-slate-800"></div>
                     </div>
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                        {certificates.map((cert) => {
-                            const isFilePDF = isPDF(cert.image);
-                            const thumbnail = getCertificateThumbnail(cert);
-                            return (
-                                <div
-                                    key={cert.id}
-                                    onClick={() => {
-                                        setPreviewCert(cert);
-                                        setPdfError(false);
-                                    }}
-                                    className="reveal-section group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-slate-900 transition-all duration-500 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_0_40px_rgba(99,102,241,0.25)]"
+
+                    {/* CERTIFICATE CATEGORY TABS */}
+                    <div className="reveal-section mb-12 flex flex-wrap justify-center gap-3">
+                        {certTabs.map((tab) => (
+                            <button
+                                key={tab.key}
+                                onClick={() =>
+                                    handleCertCategoryChange(tab.key)
+                                }
+                                disabled={isLoadingCerts}
+                                className={`group relative flex items-center gap-2 rounded-full border px-6 py-3 font-mono text-sm transition-all duration-300 ${
+                                    activeCertCategory === tab.key
+                                        ? 'border-indigo-500 bg-indigo-500/20 text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.3)]'
+                                        : 'border-white/10 text-slate-400 hover:border-indigo-500/50 hover:bg-white/5 hover:text-white'
+                                }`}
+                            >
+                                <span
+                                    className={
+                                        activeCertCategory === tab.key
+                                            ? 'text-indigo-400'
+                                            : 'text-slate-500'
+                                    }
                                 >
-                                    <div className="absolute inset-0 h-full w-full bg-slate-950">
-                                        {thumbnail ? (
-                                            <img
-                                                src={thumbnail}
-                                                alt={cert.title}
-                                                className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100"
-                                            />
-                                        ) : (
-                                            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-indigo-900/30 via-slate-900 to-slate-950">
-                                                <FileOutlined className="text-6xl text-indigo-400 opacity-40" />
-                                                <p className="mt-4 font-mono text-xs text-indigo-300/60">
-                                                    PDF CERTIFICATE
-                                                </p>
-                                            </div>
-                                        )}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/80 to-transparent"></div>
-                                    </div>
-                                    <div className="absolute bottom-0 left-0 z-20 w-full p-6">
-                                        <div className="mb-3 flex items-center justify-between">
-                                            <div className="flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 backdrop-blur-md">
-                                                <SafetyCertificateOutlined className="text-xs text-indigo-400" />
-                                                <span className="font-mono text-[10px] tracking-wider text-indigo-300">
-                                                    {isFilePDF
-                                                        ? 'PDF • CLICK TO OPEN'
-                                                        : 'VERIFIED'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <h4 className="mb-1 line-clamp-2 text-lg font-bold text-white transition-colors group-hover:text-indigo-200">
-                                            {cert.title}
-                                        </h4>
-                                        <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
-                                            <p className="font-mono text-xs text-slate-400 uppercase transition-colors group-hover:text-white">
-                                                {cert.issuer}
-                                            </p>
-                                            <span className="font-mono text-[10px] text-slate-600 group-hover:text-indigo-400">
-                                                {cert.issued_date}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                    {tab.icon}
+                                </span>
+                                <span>{tab.label}</span>
+                                {tab.key === 'competition' && (
+                                    <span className="ml-1 rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] text-yellow-400">
+                                        🏆
+                                    </span>
+                                )}
+                            </button>
+                        ))}
                     </div>
+
+                    {/* CERTIFICATES LOADING */}
+                    {isLoadingCerts ? (
+                        <div className="flex h-64 items-center justify-center">
+                            <div className="flex flex-col items-center gap-4">
+                                <LoadingOutlined
+                                    className="text-4xl text-indigo-500"
+                                    spin
+                                />
+                                <span className="font-mono text-sm text-slate-500">
+                                    Loading certificates...
+                                </span>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* CERTIFICATE GRID */}
+                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                                {certList.map((cert) => {
+                                    const thumbnail = getCertThumbnail(cert);
+                                    return (
+                                        <div
+                                            key={cert.id}
+                                            onClick={() => {
+                                                setPreviewCert(cert);
+                                                setPdfError(false);
+                                            }}
+                                            className="cert-card group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-slate-900 transition-all duration-500 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_0_40px_rgba(99,102,241,0.25)]"
+                                        >
+                                            <div className="absolute inset-0 h-full w-full bg-slate-950">
+                                                {thumbnail ? (
+                                                    <img
+                                                        src={thumbnail}
+                                                        alt={cert.title}
+                                                        className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100"
+                                                    />
+                                                ) : (
+                                                    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-indigo-900/30 via-slate-900 to-slate-950">
+                                                        <FileOutlined className="text-6xl text-indigo-400 opacity-40" />
+                                                        <p className="mt-4 font-mono text-xs text-indigo-300/60">
+                                                            {cert.is_pdf
+                                                                ? 'PDF'
+                                                                : 'IMAGE'}{' '}
+                                                            CERTIFICATE
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/80 to-transparent"></div>
+                                            </div>
+
+                                            <div className="absolute bottom-0 left-0 z-20 w-full p-6">
+                                                <div className="mb-3 flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        {cert.category ===
+                                                        'competition' ? (
+                                                            <span className="flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 font-mono text-[10px] text-yellow-400">
+                                                                <TrophyOutlined />{' '}
+                                                                AWARD
+                                                            </span>
+                                                        ) : (
+                                                            <span className="flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 font-mono text-[10px] text-indigo-300">
+                                                                <BookOutlined />{' '}
+                                                                COURSE
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {cert.is_pdf && (
+                                                        <span className="rounded bg-red-500/20 px-2 py-0.5 font-mono text-[10px] text-red-400">
+                                                            PDF
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <h4 className="mb-1 line-clamp-2 text-lg font-bold text-white transition-colors group-hover:text-indigo-200">
+                                                    {cert.title}
+                                                </h4>
+                                                <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
+                                                    <p className="font-mono text-xs text-slate-400 uppercase transition-colors group-hover:text-white">
+                                                        {cert.issuer}
+                                                    </p>
+                                                    <span className="font-mono text-[10px] text-slate-600 group-hover:text-indigo-400">
+                                                        {cert.issued_date}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* EMPTY STATE */}
+                            {certList.length === 0 && (
+                                <div className="py-16 text-center">
+                                    <SafetyCertificateOutlined className="mb-4 text-5xl text-slate-700" />
+                                    <p className="font-mono text-slate-500">
+                                        No certificates found for this category.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* LOAD MORE CERTIFICATES */}
+                            {certNextPage && (
+                                <div className="mt-12 text-center">
+                                    <button
+                                        onClick={handleLoadMoreCerts}
+                                        disabled={isLoadingMoreCerts}
+                                        className="group relative inline-flex items-center gap-3 border border-indigo-500/30 px-8 py-3 font-mono text-sm tracking-widest text-indigo-400 uppercase transition-all hover:bg-indigo-500/10 disabled:opacity-50"
+                                    >
+                                        {isLoadingMoreCerts ? (
+                                            <>
+                                                <LoadingOutlined spin />
+                                                <span>Loading...</span>
+                                            </>
+                                        ) : (
+                                            <span>Load More Certificates</span>
+                                        )}
+                                        <span className="absolute top-0 left-0 h-2 w-2 border-t border-l border-indigo-500"></span>
+                                        <span className="absolute right-0 bottom-0 h-2 w-2 border-r border-b border-indigo-500"></span>
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             </section>
 
-            {/* BLOGS SECTION - NOW SECTION 04 */}
+            {/* ==================== BLOGS SECTION ==================== */}
             <section id="insights" className="relative z-10 px-6 py-32">
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-16 flex items-end justify-between gap-4">
@@ -941,7 +1288,7 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* CONTACT SECTION - NOW SECTION 05 */}
+            {/* ==================== CONTACT SECTION ==================== */}
             <section
                 id="contact"
                 ref={contactSectionRef}
@@ -1098,7 +1445,7 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* FOOTER */}
+            {/* ==================== FOOTER ==================== */}
             <footer className="relative z-10 border-t border-white/5 bg-[#020617]/80 py-12 text-center backdrop-blur-sm">
                 <div className="mb-8 flex justify-center gap-6">
                     {[
@@ -1132,7 +1479,7 @@ export default function PortfolioIndex({
                 </div>
             </footer>
 
-            {/* MODAL CERTIFICATE PREVIEW */}
+            {/* ==================== CERTIFICATE PREVIEW MODAL ==================== */}
             <Modal
                 open={!!previewCert}
                 onCancel={() => {
@@ -1160,11 +1507,19 @@ export default function PortfolioIndex({
                     <div className="relative">
                         <div className="border-b border-white/10 bg-slate-900/50 p-6 backdrop-blur-sm">
                             <div className="mb-2 flex items-center gap-2">
-                                <SafetyCertificateOutlined className="text-indigo-400" />
-                                <span className="font-mono text-xs text-indigo-400 uppercase">
-                                    {isPDF(previewCert.image)
-                                        ? 'PDF Certificate'
-                                        : 'Image Certificate'}
+                                {previewCert.category === 'competition' ? (
+                                    <TrophyOutlined className="text-yellow-400" />
+                                ) : (
+                                    <BookOutlined className="text-indigo-400" />
+                                )}
+                                <span
+                                    className={`font-mono text-xs uppercase ${
+                                        previewCert.category === 'competition'
+                                            ? 'text-yellow-400'
+                                            : 'text-indigo-400'
+                                    }`}
+                                >
+                                    {previewCert.category_label}
                                 </span>
                             </div>
                             <h3 className="mb-2 text-2xl font-bold text-white">
@@ -1191,7 +1546,7 @@ export default function PortfolioIndex({
                             </div>
                         </div>
                         <div className="p-6">
-                            {isPDF(previewCert.image) ? (
+                            {previewCert.is_pdf ? (
                                 <div className="space-y-4">
                                     <div className="relative h-[70vh] w-full overflow-hidden rounded-lg border border-white/10 bg-slate-950">
                                         <object
@@ -1202,8 +1557,8 @@ export default function PortfolioIndex({
                                             <div className="flex h-full flex-col items-center justify-center space-y-4 p-8 text-center">
                                                 <FileOutlined className="text-4xl text-slate-500" />
                                                 <p className="text-slate-400">
-                                                    Browser tidak mendukung
-                                                    preview PDF.
+                                                    Browser doesn't support PDF
+                                                    preview.
                                                 </p>
                                                 <button
                                                     onClick={() =>

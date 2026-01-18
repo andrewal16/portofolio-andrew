@@ -1,351 +1,425 @@
 import {
+    BookOutlined,
     DeleteOutlined,
     EditOutlined,
     FileImageOutlined,
     FilePdfOutlined,
+    HolderOutlined,
     LinkOutlined,
     PlusOutlined,
     SafetyCertificateOutlined,
+    TrophyOutlined,
 } from '@ant-design/icons';
-import { router, usePage } from '@inertiajs/react';
 import {
-    Badge,
+    closestCenter,
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Link, router, usePage } from '@inertiajs/react';
+import {
     Button,
-    Card,
     Image,
+    message,
     Popconfirm,
+    Segmented,
     Space,
-    Table,
     Tag,
     Tooltip,
     Typography,
-    message,
 } from 'antd';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { route } from 'ziggy-js';
 import AppLayout from '../../../layouts/app-layout';
 
-const { Text, Link } = Typography;
+const { Title, Text } = Typography;
 
-function Index() {
-    const { certificates, flash } = usePage().props;
+// ✅ Sortable Row Component
+function SortableRow({ id, certificate, onEdit, onDelete }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id });
 
-    useEffect(() => {
-        if (flash?.success) {
-            message.success(flash.success);
-        }
-    }, [flash]);
-
-    // 🔥 Helper function untuk render preview berdasarkan file type
-    const renderFilePreview = (url, fileType) => {
-        if (!url) {
-            return (
-                <div
-                    style={{
-                        width: 80,
-                        height: 60,
-                        background: '#f0f0f0',
-                        borderRadius: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
-                    <FileImageOutlined
-                        style={{ fontSize: 24, color: '#bbb' }}
-                    />
-                </div>
-            );
-        }
-
-        // 🔥 Kalau PDF, tampilkan icon PDF dengan badge
-        if (fileType === 'pdf') {
-            return (
-                <Tooltip title="Click to view PDF">
-                    <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ textDecoration: 'none' }}
-                    >
-                        <Badge.Ribbon text="PDF" color="red">
-                            <div
-                                style={{
-                                    width: 80,
-                                    height: 60,
-                                    background:
-                                        'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)',
-                                    borderRadius: 4,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.3s ease',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.transform =
-                                        'scale(1.05)';
-                                    e.currentTarget.style.boxShadow =
-                                        '0 4px 8px rgba(0,0,0,0.2)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform =
-                                        'scale(1)';
-                                    e.currentTarget.style.boxShadow =
-                                        '0 2px 4px rgba(0,0,0,0.1)';
-                                }}
-                            >
-                                <FilePdfOutlined
-                                    style={{
-                                        fontSize: 28,
-                                        color: '#fff',
-                                        marginBottom: 4,
-                                    }}
-                                />
-                                <Text
-                                    style={{
-                                        fontSize: 10,
-                                        color: '#fff',
-                                        fontWeight: 600,
-                                    }}
-                                >
-                                    VIEW
-                                </Text>
-                            </div>
-                        </Badge.Ribbon>
-                    </a>
-                </Tooltip>
-            );
-        }
-
-        // 🔥 Kalau image, tampilkan preview normal
-        return (
-            <Badge.Ribbon text="IMAGE" color="blue">
-                <Image
-                    src={url}
-                    alt="Certificate"
-                    width={80}
-                    height={60}
-                    style={{
-                        objectFit: 'cover',
-                        borderRadius: 4,
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                    }}
-                    preview={{
-                        mask: 'Preview',
-                    }}
-                />
-            </Badge.Ribbon>
-        );
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
     };
 
-    const columns = [
-        {
-            title: 'File',
-            dataIndex: 'image_url',
-            key: 'image_url',
-            width: 120,
-            render: (url, record) => renderFilePreview(url, record.file_type),
-        },
-        {
-            title: 'Certificate Info',
-            key: 'info',
-            render: (_, record) => (
-                <div>
-                    <div
-                        style={{
-                            fontWeight: 600,
-                            fontSize: 14,
-                            marginBottom: 4,
-                        }}
-                    >
-                        {record.name}
-                    </div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                        <SafetyCertificateOutlined style={{ marginRight: 4 }} />
-                        {record.issuer}
-                    </Text>
-                    {record.credential_id && (
-                        <div>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                                ID: {record.credential_id}
-                            </Text>
+    const isPdf = certificate.file_type === 'pdf';
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="mb-3 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-all hover:shadow-md"
+        >
+            <div className="flex items-center gap-4 p-4">
+                {/* Drag Handle */}
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="flex cursor-grab items-center justify-center text-gray-400 hover:text-gray-600 active:cursor-grabbing"
+                >
+                    <HolderOutlined style={{ fontSize: 20 }} />
+                </div>
+
+                {/* Thumbnail/Icon */}
+                <div className="flex-shrink-0">
+                    {certificate.image_url ? (
+                        isPdf ? (
+                            <div className="flex h-12 w-16 items-center justify-center rounded bg-red-50">
+                                <FilePdfOutlined className="text-2xl text-red-500" />
+                            </div>
+                        ) : (
+                            <Image
+                                src={certificate.image_url}
+                                alt={certificate.name}
+                                width={64}
+                                height={48}
+                                style={{ objectFit: 'cover', borderRadius: 6 }}
+                                preview={{ mask: 'View' }}
+                            />
+                        )
+                    ) : (
+                        <div className="flex h-12 w-16 items-center justify-center rounded bg-gray-100">
+                            <FileImageOutlined className="text-xl text-gray-400" />
                         </div>
                     )}
                 </div>
-            ),
-        },
-        {
-            title: 'Issued Date',
-            dataIndex: 'issued_at',
-            key: 'issued_at',
-            width: 120,
-            sorter: (a, b) => new Date(a.issued_at) - new Date(b.issued_at),
-            render: (date, record) => (
-                <div>
-                    <div style={{ fontWeight: 500 }}>
-                        {new Date(date).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                        })}
-                    </div>
+
+                {/* Certificate Info */}
+                <div className="min-w-0 flex-1">
+                    <Text
+                        strong
+                        className="block truncate"
+                        style={{ fontSize: 14 }}
+                    >
+                        {certificate.name}
+                    </Text>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                        {record.issued_year}
+                        <SafetyCertificateOutlined className="mr-1" />
+                        {certificate.issuer}
                     </Text>
                 </div>
-            ),
-        },
-        {
-            title: 'Tags',
-            dataIndex: 'tags',
-            key: 'tags',
-            render: (tags) => (
-                <Space wrap size={[0, 4]}>
-                    {tags && tags.length > 0 ? (
-                        tags.map((tag) => (
-                            <Tag key={tag.id} color={tag.color}>
+
+                {/* Category Badge */}
+                <div className="flex-shrink-0">
+                    <Tag
+                        icon={
+                            certificate.category === 'competition' ? (
+                                <TrophyOutlined />
+                            ) : (
+                                <BookOutlined />
+                            )
+                        }
+                        color={certificate.category_color}
+                    >
+                        {certificate.category_label}
+                    </Tag>
+                </div>
+
+                {/* Tags */}
+                <div className="flex-shrink-0" style={{ maxWidth: 200 }}>
+                    <Space wrap size={[0, 4]}>
+                        {certificate.tags?.slice(0, 2).map((tag) => (
+                            <Tag
+                                key={tag.id}
+                                color={tag.color}
+                                style={{ fontSize: 10 }}
+                            >
                                 {tag.name}
                             </Tag>
-                        ))
-                    ) : (
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            No tags
-                        </Text>
-                    )}
-                </Space>
-            ),
-        },
-        {
-            title: 'Credential',
-            dataIndex: 'credential_url',
-            key: 'credential_url',
-            width: 100,
-            align: 'center',
-            render: (url) =>
-                url ? (
-                    <Tooltip title="View Credential">
-                        <Button
-                            type="link"
-                            icon={<LinkOutlined />}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            View
-                        </Button>
-                    </Tooltip>
-                ) : (
+                        ))}
+                        {certificate.tags?.length > 2 && (
+                            <Tag style={{ fontSize: 10 }}>
+                                +{certificate.tags.length - 2}
+                            </Tag>
+                        )}
+                    </Space>
+                </div>
+
+                {/* Date */}
+                <div className="flex-shrink-0" style={{ minWidth: 80 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                        -
+                        {certificate.issued_at}
                     </Text>
-                ),
-        },
-        {
-            title: 'Action',
-            key: 'action',
-            width: 150,
-            align: 'center',
-            render: (_, record) => (
-                <Space size="small">
-                    <Tooltip title="Edit">
-                        <Button
-                            type="primary"
-                            icon={<EditOutlined />}
-                            size="small"
-                            onClick={() =>
-                                router.visit(
-                                    route('admin.certificate.edit', record.id),
-                                )
-                            }
-                        />
-                    </Tooltip>
-                    <Popconfirm
-                        title="Hapus sertifikat?"
-                        description="Data yang dihapus tidak dapat dikembalikan."
-                        onConfirm={() => handleDelete(record.id)}
-                        okText="Ya, Hapus"
-                        cancelText="Batal"
-                        okButtonProps={{ danger: true }}
-                    >
-                        <Tooltip title="Delete">
+                </div>
+
+                {/* Display Order */}
+                <div className="flex-shrink-0" style={{ minWidth: 40 }}>
+                    <Text strong style={{ fontSize: 14, color: '#1890ff' }}>
+                        #{certificate.display_order}
+                    </Text>
+                </div>
+
+                {/* Actions */}
+                <div className="flex-shrink-0">
+                    <Space>
+                        {certificate.credential_url && (
+                            <Tooltip title="View Credential">
+                                <Button
+                                    type="text"
+                                    icon={<LinkOutlined />}
+                                    href={certificate.credential_url}
+                                    target="_blank"
+                                    size="small"
+                                />
+                            </Tooltip>
+                        )}
+                        <Tooltip title="Edit">
                             <Button
-                                danger
-                                icon={<DeleteOutlined />}
+                                type="primary"
+                                icon={<EditOutlined />}
+                                onClick={() => onEdit(certificate.id)}
                                 size="small"
                             />
                         </Tooltip>
-                    </Popconfirm>
-                </Space>
-            ),
-        },
-    ];
+                        <Popconfirm
+                            title="Delete Certificate"
+                            description="This action cannot be undone."
+                            onConfirm={() => onDelete(certificate.id)}
+                            okText="Delete"
+                            cancelText="Cancel"
+                            okButtonProps={{ danger: true }}
+                        >
+                            <Tooltip title="Delete">
+                                <Button
+                                    type="text"
+                                    danger
+                                    icon={<DeleteOutlined />}
+                                    size="small"
+                                />
+                            </Tooltip>
+                        </Popconfirm>
+                    </Space>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ✅ Main Index Component
+export default function CertificateIndex() {
+    const { certificates, categoryOptions, filters, flash } = usePage().props;
+    const [items, setItems] = useState(certificates.data || []);
+    const [reordering, setReordering] = useState(false);
+    const [activeCategory, setActiveCategory] = useState(
+        filters?.category || 'all',
+    );
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        }),
+    );
+
+    useEffect(() => {
+        if (flash?.success) message.success(flash.success);
+    }, [flash]);
+
+    useEffect(() => {
+        setItems(certificates.data || []);
+    }, [certificates.data]);
+
+    const handleDragEnd = (event) => {
+        const { active, over } = event;
+        if (active.id !== over.id) {
+            setItems((items) => {
+                const oldIndex = items.findIndex((i) => i.id === active.id);
+                const newIndex = items.findIndex((i) => i.id === over.id);
+                const reordered = arrayMove(items, oldIndex, newIndex);
+
+                const updated = reordered.map((item, idx) => ({
+                    ...item,
+                    display_order: idx,
+                }));
+
+                saveNewOrder(updated);
+                return updated;
+            });
+        }
+    };
+
+    const saveNewOrder = (reorderedItems) => {
+        setReordering(true);
+        const orderData = reorderedItems.map((item) => ({
+            id: item.id,
+            display_order: item.display_order,
+        }));
+
+        router.post(
+            route('admin.certificate.reorder'),
+            { items: orderData },
+            {
+                preserveScroll: true,
+                onSuccess: () => message.success('Order updated!'),
+                onError: () => message.error('Failed to update order'),
+                onFinish: () => setReordering(false),
+            },
+        );
+    };
 
     const handleDelete = (id) => {
         router.delete(route('admin.certificate.destroy', id), {
             preserveScroll: true,
             onSuccess: () => {
-                message.success('Sertifikat berhasil dihapus!');
+                message.success('Certificate deleted!');
+                setItems(items.filter((i) => i.id !== id));
             },
         });
     };
 
+    const handleEdit = (id) =>
+        router.visit(route('admin.certificate.edit', id));
+
+    const handleCategoryChange = (value) => {
+        setActiveCategory(value);
+        router.get(
+            route('admin.certificate.index'),
+            { category: value === 'all' ? null : value },
+            { preserveState: true },
+        );
+    };
+
+    // Category tabs options
+    const categoryTabs = [
+        { label: 'All', value: 'all', icon: <SafetyCertificateOutlined /> },
+        { label: 'Learning', value: 'learning', icon: <BookOutlined /> },
+        {
+            label: 'Competition',
+            value: 'competition',
+            icon: <TrophyOutlined />,
+        },
+    ];
+
     return (
-        <AppLayout header="Certificate Management">
-            <div>
-                <div
-                    style={{
-                        marginBottom: 16,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                    }}
-                >
+        <AppLayout
+            header={
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
-                        <Text strong style={{ fontSize: 16 }}>
-                            Total: {certificates.total} Certificates
+                        <Title level={2} style={{ margin: 0 }}>
+                            Certificate Management
+                        </Title>
+                        <Text type="secondary">
+                            Drag & drop to reorder • {certificates.total}{' '}
+                            certificates
                         </Text>
                     </div>
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() =>
-                            router.visit(route('admin.certificate.create'))
-                        }
-                        size="large"
-                    >
-                        Add Certificate
-                    </Button>
+                    <Space>
+                        <Segmented
+                            value={activeCategory}
+                            onChange={handleCategoryChange}
+                            options={categoryTabs.map((tab) => ({
+                                label: (
+                                    <span className="flex items-center gap-1">
+                                        {tab.icon} {tab.label}
+                                    </span>
+                                ),
+                                value: tab.value,
+                            }))}
+                        />
+                        <Link href={route('admin.certificate.create')}>
+                            <Button
+                                type="primary"
+                                icon={<PlusOutlined />}
+                                size="large"
+                            >
+                                Add Certificate
+                            </Button>
+                        </Link>
+                    </Space>
                 </div>
+            }
+        >
+            {reordering && (
+                <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                    <Text>🔄 Saving new order...</Text>
+                </div>
+            )}
 
-                <Table
-                    dataSource={certificates.data}
-                    columns={columns}
-                    rowKey="id"
-                    pagination={{
-                        current: certificates.current_page,
-                        pageSize: certificates.per_page,
-                        total: certificates.total,
-                        showSizeChanger: true,
-                        showTotal: (total, range) =>
-                            `${range[0]}-${range[1]} of ${total} certificates`,
-                        onChange: (page, pageSize) => {
-                            router.get(
-                                route('admin.certificate.index', {
-                                    page,
-                                    per_page: pageSize,
-                                }),
-                                {},
-                                { preserveState: true },
-                            );
-                        },
-                    }}
-                />
-            </div>
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+            >
+                <SortableContext
+                    items={items.map((i) => i.id)}
+                    strategy={verticalListSortingStrategy}
+                >
+                    <div>
+                        {items.map((certificate) => (
+                            <SortableRow
+                                key={certificate.id}
+                                id={certificate.id}
+                                certificate={certificate}
+                                onEdit={handleEdit}
+                                onDelete={handleDelete}
+                            />
+                        ))}
+                    </div>
+                </SortableContext>
+            </DndContext>
+
+            {items.length === 0 && (
+                <div className="py-16 text-center text-gray-400">
+                    <SafetyCertificateOutlined
+                        style={{ fontSize: 48, marginBottom: 16 }}
+                    />
+                    <br />
+                    <Text type="secondary">No certificates found.</Text>
+                </div>
+            )}
+
+            {/* Pagination */}
+            {certificates.last_page > 1 && (
+                <div className="mt-6 flex justify-center">
+                    <Space>
+                        {Array.from(
+                            { length: certificates.last_page },
+                            (_, i) => (
+                                <Button
+                                    key={i + 1}
+                                    type={
+                                        certificates.current_page === i + 1
+                                            ? 'primary'
+                                            : 'default'
+                                    }
+                                    onClick={() =>
+                                        router.get(
+                                            route('admin.certificate.index', {
+                                                page: i + 1,
+                                                category:
+                                                    activeCategory === 'all'
+                                                        ? null
+                                                        : activeCategory,
+                                            }),
+                                        )
+                                    }
+                                >
+                                    {i + 1}
+                                </Button>
+                            ),
+                        )}
+                    </Space>
+                </div>
+            )}
         </AppLayout>
     );
 }
-
-export default Index;

@@ -11,11 +11,9 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 // ============================================================================
-// 🏠 ROOT REDIRECT - Auto redirect ke /portfolio
+// 🏠 ROOT REDIRECT
 // ============================================================================
-Route::get('/', function () {
-    return redirect('/portfolio');
-})->name('home');
+Route::get('/', fn() => redirect('/portfolio'))->name('home');
 
 // ============================================================================
 // 🌐 PUBLIC PORTFOLIO ROUTES
@@ -32,15 +30,19 @@ Route::get('/portfolio/experience/{slug}', [PortfolioController::class, 'showExp
 Route::get('/portfolio/blog/{slug}', [PortfolioController::class, 'showBlog'])
     ->name('portfolio.blog.show');
 
-// Redirect typo 'portofolio' ke 'portfolio'
-Route::get('/portofolio', function () {
-    return redirect('/portfolio', 301);
-});
+// ✅ NEW: API endpoint for AJAX pagination & filtering
+Route::get('/api/portfolio/projects', [PortfolioController::class, 'getProjects'])
+    ->name('api.portfolio.projects');
+
+Route::get('/api/portfolio/certificates', [PortfolioController::class, 'getCertificates'])
+    ->name('api.portfolio.certificates');
+
+// Redirect typo
+Route::get('/portofolio', fn() => redirect('/portfolio', 301));
 
 // ============================================================================
 // 🎯 PROJECT & BLOG PUBLIC ROUTES
 // ============================================================================
-
 Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
     $project->load(['publishedBlogPosts' => function ($query) {
         $query->select('id', 'project_id', 'title', 'slug', 'content', 'published_at')
@@ -59,7 +61,7 @@ Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
             'started_at' => $project->started_at?->format('Y-m-d'),
             'finished_at' => $project->finished_at?->format('Y-m-d'),
             'status' => $project->status,
-            'blog_posts' => $project->publishedBlogPosts->map(fn ($post) => [
+            'blog_posts' => $project->publishedBlogPosts->map(fn($post) => [
                 'id' => $post->id,
                 'title' => $post->title,
                 'slug' => $post->slug,
@@ -75,7 +77,7 @@ Route::get('/projects/{project:slug}/blog/{blogPost:slug}', function (
     \App\Models\BlogPost $blogPost
 ) {
     abort_if($blogPost->project_id !== $project->id, 404);
-    abort_if(! $blogPost->is_published, 404);
+    abort_if(!$blogPost->is_published, 404);
 
     return Inertia::render('Projects/BlogPost', [
         'project' => [
@@ -98,31 +100,33 @@ Route::post('/contact/send', [PortfolioController::class, 'sendMessage'])
     ->name('contact.send');
 
 // ============================================================================
-// 🔒 ADMIN ROUTES - HARUS LOGIN DULU!
+// 🔒 ADMIN ROUTES
 // ============================================================================
 Route::prefix('admin')
     ->name('admin.')
     ->middleware(['auth:sanctum', 'verified'])
     ->group(function () {
-        // Dashboard redirect ke project index
-        Route::get('/dashboard', function () {
-            return redirect()->route('admin.project.index');
-        })->name('dashboard');
+        // Dashboard
+        Route::get('/dashboard', fn() => redirect()->route('admin.project.index'))
+            ->name('dashboard');
 
-        // Projects CRUD
+        // ✅ Projects CRUD + Reorder
         Route::resource('project', ProjectController::class)->except(['show']);
+        Route::post('project/reorder', [ProjectController::class, 'reorder'])
+            ->name('project.reorder');
 
         // ✅ Experiences CRUD + Reorder
         Route::resource('experience', ExperienceController::class)->except(['show']);
         Route::post('experience/reorder', [ExperienceController::class, 'reorder'])
             ->name('experience.reorder');
 
-        // Certificates CRUD
+        // ✅ Certificates CRUD + Reorder
         Route::resource('certificate', CertificateController::class)->except(['show']);
+        Route::post('certificate/reorder', [CertificateController::class, 'reorder'])
+            ->name('certificate.reorder');
 
         // Blog Posts CRUD
         Route::resource('blog-posts', BlogPostController::class);
-
         Route::patch('blog-posts/{blog_post}/toggle-publish', [BlogPostController::class, 'togglePublish'])
             ->name('blog-posts.toggle-publish');
 
@@ -140,8 +144,6 @@ Route::prefix('admin')
 require __DIR__.'/settings.php';
 
 // ============================================================================
-// 🚨 FALLBACK - Redirect semua route yang tidak ada ke /portfolio
+// 🚨 FALLBACK
 // ============================================================================
-Route::fallback(function () {
-    return redirect('/portfolio');
-});
+Route::fallback(fn() => redirect('/portfolio'));
