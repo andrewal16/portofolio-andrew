@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BlogPostController;
 use App\Http\Controllers\CertificateController;
+use App\Http\Controllers\ExperienceController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TagController;
@@ -25,19 +26,21 @@ Route::get('/portfolio', [PortfolioController::class, 'index'])
 Route::get('/portfolio/project/{slug}', [PortfolioController::class, 'show'])
     ->name('portfolio.project.show');
 
+Route::get('/portfolio/experience/{slug}', [PortfolioController::class, 'showExperience'])
+    ->name('portfolio.experience.show');
+
 Route::get('/portfolio/blog/{slug}', [PortfolioController::class, 'showBlog'])
     ->name('portfolio.blog.show');
 
 // Redirect typo 'portofolio' ke 'portfolio'
 Route::get('/portofolio', function () {
-    return redirect('/portfolio', 301); // ✅ Permanent redirect
+    return redirect('/portfolio', 301);
 });
 
 // ============================================================================
 // 🎯 PROJECT & BLOG PUBLIC ROUTES
 // ============================================================================
 
-// Project detail dengan blog posts
 Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
     $project->load(['publishedBlogPosts' => function ($query) {
         $query->select('id', 'project_id', 'title', 'slug', 'content', 'published_at')
@@ -67,7 +70,6 @@ Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
     ]);
 })->name('projects.show');
 
-// Blog post detail
 Route::get('/projects/{project:slug}/blog/{blogPost:slug}', function (
     \App\Models\Project $project,
     \App\Models\BlogPost $blogPost
@@ -96,7 +98,7 @@ Route::post('/contact/send', [PortfolioController::class, 'sendMessage'])
     ->name('contact.send');
 
 // ============================================================================
-// 🔐 ADMIN ROUTES - HARUS LOGIN DULU!
+// 🔒 ADMIN ROUTES - HARUS LOGIN DULU!
 // ============================================================================
 Route::prefix('admin')
     ->name('admin.')
@@ -110,13 +112,17 @@ Route::prefix('admin')
         // Projects CRUD
         Route::resource('project', ProjectController::class)->except(['show']);
 
+        // ✅ Experiences CRUD + Reorder
+        Route::resource('experience', ExperienceController::class)->except(['show']);
+        Route::post('experience/reorder', [ExperienceController::class, 'reorder'])
+            ->name('experience.reorder');
+
         // Certificates CRUD
         Route::resource('certificate', CertificateController::class)->except(['show']);
 
         // Blog Posts CRUD
         Route::resource('blog-posts', BlogPostController::class);
 
-        // Toggle publish status
         Route::patch('blog-posts/{blog_post}/toggle-publish', [BlogPostController::class, 'togglePublish'])
             ->name('blog-posts.toggle-publish');
 

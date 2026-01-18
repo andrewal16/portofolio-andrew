@@ -4,6 +4,7 @@ import {
     MenuFoldOutlined,
     MenuUnfoldOutlined,
     ProjectOutlined,
+    RocketOutlined,
     SafetyCertificateOutlined,
     SettingOutlined,
     UserOutlined,
@@ -34,13 +35,21 @@ export default function AppLayout({ children, header }) {
         token: { colorBgContainer, borderRadiusLG },
     } = theme.useToken();
 
-    // ✅ Menu items configuration
+    // ✅ Menu items configuration (UPDATED with Experience)
     const menuItems = [
         {
             key: 'admin.project.index',
             icon: <ProjectOutlined />,
             label: <Link href={route('admin.project.index')}>Projects</Link>,
             title: 'Projects',
+        },
+        {
+            key: 'admin.experience.index',
+            icon: <RocketOutlined />,
+            label: (
+                <Link href={route('admin.experience.index')}>Experience</Link>
+            ),
+            title: 'Experience',
         },
         {
             key: 'admin.certificate.index',
@@ -62,7 +71,7 @@ export default function AppLayout({ children, header }) {
         },
     ];
 
-    // ✅ FIXED: Logout handler menggunakan Inertia way
+    // ✅ Logout handler menggunakan Inertia way
     const handleLogout = () => {
         router.post(
             route('logout'),
@@ -96,16 +105,19 @@ export default function AppLayout({ children, header }) {
             icon: <LogoutOutlined />,
             label: 'Logout',
             danger: true,
-            onClick: handleLogout, // ✅ Pakai onClick handler
+            onClick: handleLogout,
         },
     ];
 
-    // ✅ Get current active menu key
+    // ✅ Get current active menu key (UPDATED with Experience)
     const getCurrentMenuKey = () => {
         try {
             const currentRoute = route().current();
 
             if (currentRoute) {
+                if (currentRoute.startsWith('admin.experience')) {
+                    return 'admin.experience.index';
+                }
                 if (currentRoute.startsWith('admin.certificate')) {
                     return 'admin.certificate.index';
                 }
@@ -126,6 +138,10 @@ export default function AppLayout({ children, header }) {
 
         const normalizedUrl = url.replace(/\/$/, '').toLowerCase();
 
+        if (normalizedUrl.match(/\/admin\/experience/)) {
+            return 'admin.experience.index';
+        }
+
         if (normalizedUrl.match(/\/admin\/certificate/)) {
             return 'admin.certificate.index';
         }
@@ -141,7 +157,7 @@ export default function AppLayout({ children, header }) {
         return 'admin.project.index';
     };
 
-    // ✅ Generate breadcrumb dari URL
+    // ✅ Generate breadcrumb dari URL (UPDATED with Experience)
     const getBreadcrumbItems = () => {
         const items = [];
 
@@ -155,6 +171,8 @@ export default function AppLayout({ children, header }) {
             let sectionLabel = section;
             if (section === 'blog-posts') {
                 sectionLabel = 'Blog Posts';
+            } else if (section === 'experience') {
+                sectionLabel = 'Experience';
             } else {
                 sectionLabel =
                     section.charAt(0).toUpperCase() + section.slice(1);

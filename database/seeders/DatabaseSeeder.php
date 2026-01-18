@@ -10,6 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             AdminUserSeeder::class, // ✅ Tambahkan ini
+            ExperienceSeeder::class,
         ]);
     }
 }

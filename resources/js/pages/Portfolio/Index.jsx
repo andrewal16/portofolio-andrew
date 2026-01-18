@@ -1,15 +1,20 @@
 import {
     ArrowRightOutlined,
+    CalendarOutlined,
     CloseOutlined,
+    CodeOutlined,
     DownloadOutlined,
     FileOutlined,
     GithubOutlined,
+    GlobalOutlined,
     LinkedinOutlined,
     LoadingOutlined,
     ReadOutlined,
+    RocketOutlined,
     SafetyCertificateOutlined,
     SendOutlined,
     ThunderboltOutlined,
+    TrophyOutlined,
     TwitterOutlined,
 } from '@ant-design/icons';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
@@ -18,9 +23,9 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { TextPlugin } from 'gsap/TextPlugin';
 import { useEffect, useRef, useState } from 'react';
-import { BackgroundGradientAnimation } from '../../../../components/ui/background-gradient-animation';
+ import { BackgroundGradientAnimation } from '../../../../components/ui/background-gradient-animation';
+import PageLoader from './PageLoader';
 
-// Register GSAP Plugins
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
 
 export default function PortfolioIndex({
@@ -28,22 +33,16 @@ export default function PortfolioIndex({
     projects,
     certificates,
     recent_blogs,
+    experiences,
 }) {
-    // --- GET FLASH MESSAGES FROM INERTIA ---
-    console.log('certificate', JSON.stringify(certificates, null, 2));
     const { flash } = usePage().props;
-
-    // --- State & Hooks ---
     const [isLoading, setIsLoading] = useState(true);
     const [previewCert, setPreviewCert] = useState(null);
     const [pdfError, setPdfError] = useState(false);
-
-    // Pagination Logic
     const [projectList, setProjectList] = useState(projects.data || []);
     const [nextPageUrl, setNextPageUrl] = useState(projects.next_page_url);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-    // Contact Form Hook (Inertia)
     const { data, setData, post, processing, reset, errors } = useForm({
         name: '',
         email: '',
@@ -51,98 +50,14 @@ export default function PortfolioIndex({
         message: '',
     });
 
-    // --- PDF Helper Functions ---
-    const isPDF = (url) => {
-        if (!url) return false;
-        return url.toLowerCase().endsWith('.pdf');
-    };
-
-    // Generate PDF thumbnail from Cloudinary first page
-    const getPDFThumbnail = (pdfUrl) => {
-        if (!pdfUrl) return null;
-
-        // Check if it's a Cloudinary PDF URL
-        if (pdfUrl.includes('cloudinary.com') && pdfUrl.includes('.pdf')) {
-            // Transform Cloudinary URL to generate thumbnail from first page
-            // Example: .../upload/v123/file.pdf -> .../upload/pg_1,w_600,h_400,c_fill,f_jpg,q_auto/v123/file.pdf
-
-            const urlParts = pdfUrl.split('/upload/');
-            if (urlParts.length === 2) {
-                const baseUrl = urlParts[0] + '/upload/';
-                const pathAndFile = urlParts[1];
-
-                // Transformation parameters:
-                // pg_1 = first page
-                // w_600 = width 600px
-                // h_400 = height 400px
-                // c_fill = crop/fill mode
-                // f_jpg = convert to JPEG
-                // q_auto = automatic quality optimization
-                const thumbnailUrl =
-                    baseUrl +
-                    'pg_1,w_600,h_400,c_fill,f_jpg,q_auto/' +
-                    pathAndFile;
-
-                return thumbnailUrl;
-            }
-        }
-
-        return null;
-    };
-
-    // Get certificate thumbnail (PDF or Image)
-    const getCertificateThumbnail = (cert) => {
-        if (isPDF(cert.image)) {
-            // For PDF, generate thumbnail from first page
-            return getPDFThumbnail(cert.image);
-        }
-        return cert.image;
-    };
-
-    // Enhanced download handler with Cloudinary support
-    const handleDownloadPDF = (url, filename) => {
-        try {
-            // Method 1: Use Cloudinary's attachment flag for proper download
-            if (url.includes('cloudinary.com')) {
-                const urlParts = url.split('/upload/');
-                if (urlParts.length === 2) {
-                    // Add fl_attachment to force download instead of inline view
-                    const downloadUrl =
-                        urlParts[0] + '/upload/fl_attachment/' + urlParts[1];
-
-                    // Open in new tab (browser will handle download)
-                    window.open(downloadUrl, '_blank', 'noopener,noreferrer');
-                    message.success('Download started!');
-                    return;
-                }
-            }
-
-            // Method 2: Fallback to standard download for non-Cloudinary URLs
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename || 'certificate.pdf';
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            message.success('Download started!');
-        } catch (error) {
-            console.error('Download error:', error);
-            message.error('Download failed. Opening in new tab instead.');
-            window.open(url, '_blank', 'noopener,noreferrer');
-        }
-    };
-
-    // --- Refs ---
     const containerRef = useRef(null);
     const cursorRef = useRef(null);
     const textRef = useRef(null);
     const marqueeRef = useRef(null);
     const contactSectionRef = useRef(null);
+    const bioSectionRef = useRef(null);
+    const bioStatsRef = useRef(null);
 
-    // --- Data Static ---
     const roles = ['Web Developer', 'Data Scientist', 'Creative Coder'];
     const techStack = [
         'Laravel',
@@ -161,7 +76,49 @@ export default function PortfolioIndex({
         ...techStack,
     ];
 
-    // --- ANIMATION INIT ---
+    const defaultStats = [
+        { value: '3+', label: 'Years Exp', icon: <ThunderboltOutlined /> },
+        { value: '20+', label: 'Projects', icon: <CodeOutlined /> },
+        { value: '10+', label: 'Tech Stack', icon: <GlobalOutlined /> },
+        { value: 'Top 1%', label: 'AI4Impact', icon: <TrophyOutlined /> },
+    ];
+    const stats = profile.stats || defaultStats;
+
+    const isPDF = (url) => url && url.toLowerCase().endsWith('.pdf');
+    const getPDFThumbnail = (pdfUrl) => {
+        if (!pdfUrl || !pdfUrl.includes('cloudinary.com')) return null;
+        const urlParts = pdfUrl.split('/upload/');
+        if (urlParts.length === 2)
+            return (
+                urlParts[0] +
+                '/upload/pg_1,w_600,h_400,c_fill,f_jpg,q_auto/' +
+                urlParts[1]
+            );
+        return null;
+    };
+    const getCertificateThumbnail = (cert) =>
+        isPDF(cert.image) ? getPDFThumbnail(cert.image) : cert.image;
+
+    const handleDownloadPDF = (url, filename) => {
+        try {
+            if (url.includes('cloudinary.com')) {
+                const urlParts = url.split('/upload/');
+                if (urlParts.length === 2) {
+                    window.open(
+                        urlParts[0] + '/upload/fl_attachment/' + urlParts[1],
+                        '_blank',
+                        'noopener,noreferrer',
+                    );
+                    message.success('Download started!');
+                    return;
+                }
+            }
+            window.open(url, '_blank');
+        } catch (error) {
+            window.open(url, '_blank');
+        }
+    };
+
     useEffect(() => {
         const ctx = gsap.context(() => {
             const tl = gsap.timeline({
@@ -171,7 +128,6 @@ export default function PortfolioIndex({
                 },
             });
 
-            // Splash
             tl.to('.counter', {
                 innerText: 100,
                 duration: 1.5,
@@ -189,7 +145,6 @@ export default function PortfolioIndex({
                     duration: 0.8,
                     ease: 'power4.inOut',
                 })
-                // Hero Reveal
                 .from(
                     '.hero-element',
                     {
@@ -213,7 +168,6 @@ export default function PortfolioIndex({
                     '<',
                 );
 
-            // Marquee
             gsap.to(marqueeRef.current, {
                 xPercent: -50,
                 repeat: -1,
@@ -221,7 +175,6 @@ export default function PortfolioIndex({
                 ease: 'linear',
             });
 
-            // Scroll Triggers
             gsap.utils.toArray('.reveal-section').forEach((section) => {
                 gsap.from(section, {
                     scrollTrigger: { trigger: section, start: 'top 80%' },
@@ -231,11 +184,35 @@ export default function PortfolioIndex({
                     ease: 'power2.out',
                 });
             });
+
+            // Bio Section Animations
+            gsap.from('.bio-reveal', {
+                scrollTrigger: {
+                    trigger: bioSectionRef.current,
+                    start: 'top 80%',
+                },
+                y: 60,
+                opacity: 0,
+                stagger: 0.15,
+                duration: 1,
+                ease: 'power3.out',
+            });
+
+            gsap.from('.stat-item', {
+                scrollTrigger: {
+                    trigger: bioStatsRef.current,
+                    start: 'top 85%',
+                },
+                scale: 0.8,
+                opacity: 0,
+                stagger: 0.1,
+                duration: 0.6,
+                ease: 'back.out(1.7)',
+            });
         }, containerRef);
         return () => ctx.revert();
     }, []);
 
-    // Typewriter Logic
     const startTypewriter = () => {
         if (!textRef.current) return;
         let masterTl = gsap.timeline({ repeat: -1 });
@@ -250,7 +227,6 @@ export default function PortfolioIndex({
         });
     };
 
-    // Cursor Blink
     useEffect(() => {
         gsap.to(cursorRef.current, {
             opacity: 0,
@@ -261,19 +237,19 @@ export default function PortfolioIndex({
         });
     }, []);
 
-    // --- AUTO SCROLL TO CONTACT AFTER SUCCESS ---
     useEffect(() => {
         if (flash?.success && contactSectionRef.current) {
-            setTimeout(() => {
-                contactSectionRef.current.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start',
-                });
-            }, 300);
+            setTimeout(
+                () =>
+                    contactSectionRef.current.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                    }),
+                300,
+            );
         }
     }, [flash?.success]);
 
-    // --- Handlers ---
     const handleLoadMore = async () => {
         if (!nextPageUrl) return;
         setIsLoadingMore(true);
@@ -283,23 +259,24 @@ export default function PortfolioIndex({
             });
             if (res.ok) {
                 const json = await res.json();
-                const newData = json.data || json.projects?.data || [];
-                const newNext =
-                    json.next_page_url || json.projects?.next_page_url;
-
-                setProjectList((prev) => [...prev, ...newData]);
-                setNextPageUrl(newNext);
-
-                setTimeout(() => {
-                    gsap.fromTo(
-                        '.project-card-new',
-                        { opacity: 0, y: 30 },
-                        { opacity: 1, y: 0, stagger: 0.1 },
-                    );
-                }, 100);
+                setProjectList((prev) => [
+                    ...prev,
+                    ...(json.data || json.projects?.data || []),
+                ]);
+                setNextPageUrl(
+                    json.next_page_url || json.projects?.next_page_url,
+                );
+                setTimeout(
+                    () =>
+                        gsap.fromTo(
+                            '.project-card-new',
+                            { opacity: 0, y: 30 },
+                            { opacity: 1, y: 0, stagger: 0.1 },
+                        ),
+                    100,
+                );
             }
         } catch (err) {
-            console.error(err);
             message.error('Failed to load more projects');
         } finally {
             setIsLoadingMore(false);
@@ -312,9 +289,8 @@ export default function PortfolioIndex({
                 reset();
                 message.success('Message sent successfully!');
             },
-            onError: () => {
-                message.error('Please check your inputs and try again.');
-            },
+            onError: () =>
+                message.error('Please check your inputs and try again.'),
         });
     };
 
@@ -324,6 +300,7 @@ export default function PortfolioIndex({
             className="min-h-screen overflow-x-hidden bg-[#020617] font-['Space_Grotesk'] text-slate-200 selection:bg-cyan-500 selection:text-white"
         >
             <Head title={`Portfolio - ${profile.name}`} />
+            <PageLoader />
 
             {/* SPLASH SCREEN */}
             <div className="splash-screen fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#020617]">
@@ -410,12 +387,12 @@ export default function PortfolioIndex({
                             <button
                                 onClick={() =>
                                     document
-                                        .getElementById('projects')
+                                        .getElementById('experience')
                                         .scrollIntoView({ behavior: 'smooth' })
                                 }
                                 className="rounded-full bg-cyan-600 px-8 py-3 font-bold text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all hover:scale-105 hover:bg-cyan-500"
                             >
-                                View Projects
+                                View Experience
                             </button>
                             <a
                                 href="#"
@@ -455,13 +432,319 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* PROJECTS SECTION */}
+            {/* ✨ NEW: ABOUT ME / BIO SECTION */}
+            <section
+                ref={bioSectionRef}
+                className="relative z-10 overflow-hidden border-b border-white/5 bg-gradient-to-b from-[#020617] via-[#0a101f] to-[#020617] px-6 py-32"
+            >
+                <div className="pointer-events-none absolute inset-0">
+                    <div className="absolute -top-20 left-1/4 h-[500px] w-[500px] rounded-full bg-cyan-500/5 blur-[120px]"></div>
+                    <div className="absolute right-1/4 -bottom-20 h-[400px] w-[400px] rounded-full bg-green-500/5 blur-[100px]"></div>
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.03)_1px,transparent_1px)] bg-[size:60px_60px]"></div>
+                </div>
+
+                <div className="relative z-10 mx-auto max-w-7xl">
+                    <div className="bio-reveal mb-16 text-center">
+                        <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-cyan-500/20 bg-cyan-500/5 px-5 py-2 backdrop-blur-sm">
+                            <span className="relative flex h-2 w-2">
+                                <span className="absolute h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75"></span>
+                                <span className="relative h-2 w-2 rounded-full bg-cyan-500"></span>
+                            </span>
+                            <span className="font-mono text-xs tracking-[0.2em] text-cyan-400 uppercase">
+                                About Me
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-12">
+                        {/* Left: Visual Card */}
+                        <div className="bio-reveal lg:col-span-5">
+                            <div className="relative mx-auto max-w-md lg:mx-0">
+                                <div className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/90 p-8 backdrop-blur-xl transition-all duration-500 hover:border-cyan-500/30 hover:shadow-[0_0_60px_rgba(6,182,212,0.15)]">
+                                    <div className="relative mb-6 flex justify-center">
+                                        <div className="relative">
+                                            <div className="absolute -inset-3 rounded-full bg-gradient-to-r from-cyan-500 to-green-500 opacity-20 blur-xl transition-all duration-500 group-hover:opacity-40"></div>
+                                            <div className="absolute -inset-1 animate-[spin_8s_linear_infinite] rounded-full bg-gradient-to-r from-cyan-500 via-green-500 to-cyan-500 opacity-75"></div>
+                                            <img
+                                                src={profile.avatar}
+                                                alt={profile.name}
+                                                className="relative h-40 w-40 rounded-full border-4 border-slate-900 object-cover shadow-2xl transition-transform duration-500 group-hover:scale-105"
+                                            />
+                                            <div className="absolute -right-2 -bottom-2 flex h-12 w-12 items-center justify-center rounded-full border-4 border-slate-900 bg-gradient-to-r from-green-500 to-emerald-500 shadow-lg shadow-green-500/30">
+                                                <RocketOutlined className="text-lg text-white" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="relative z-10 text-center">
+                                        <h3 className="mb-2 text-2xl font-bold text-white">
+                                            {profile.name}
+                                        </h3>
+                                        <p className="mb-4 font-mono text-sm text-cyan-400">
+                                            {profile.title ||
+                                                'Full-Stack Developer'}
+                                        </p>
+                                        <div className="flex flex-wrap justify-center gap-2">
+                                            {['Laravel', 'React', 'Python'].map(
+                                                (tag, i) => (
+                                                    <span
+                                                        key={i}
+                                                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-400 transition-all hover:border-cyan-500/30 hover:text-cyan-400"
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                ),
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="relative z-10 mt-6 rounded-xl border border-yellow-500/20 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/20">
+                                                <TrophyOutlined className="text-lg text-yellow-400" />
+                                            </div>
+                                            <div>
+                                                <p className="font-mono text-xs text-yellow-400/80">
+                                                    ACHIEVEMENT
+                                                </p>
+                                                <p className="font-bold text-yellow-300">
+                                                    AI4Impact Scholar
+                                                </p>
+                                            </div>
+                                            <div className="ml-auto rounded-full bg-yellow-500/20 px-3 py-1">
+                                                <span className="font-mono text-xs font-bold text-yellow-400">
+                                                    Top 0.26%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="absolute -top-6 -right-6 hidden animate-[float_4s_ease-in-out_infinite] rounded-xl border border-cyan-500/20 bg-slate-900/80 p-3 backdrop-blur-sm lg:block">
+                                    <CodeOutlined className="text-2xl text-cyan-400" />
+                                </div>
+                                <div className="absolute -bottom-4 -left-4 hidden animate-[float_4s_ease-in-out_infinite_1s] rounded-xl border border-green-500/20 bg-slate-900/80 p-3 backdrop-blur-sm lg:block">
+                                    <GlobalOutlined className="text-2xl text-green-400" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right: Content */}
+                        <div className="space-y-8 lg:col-span-7">
+                            <div className="bio-reveal">
+                                <h2 className="mb-4 text-4xl leading-tight font-bold text-white md:text-5xl lg:text-6xl">
+                                    Crafting Digital
+                                    <span className="block bg-gradient-to-r from-cyan-400 via-green-400 to-cyan-400 bg-clip-text text-transparent">
+                                        Experiences
+                                    </span>
+                                </h2>
+                            </div>
+                            <div className="bio-reveal space-y-4">
+                                <p className="text-lg leading-relaxed text-slate-300">
+                                    {profile.bio}
+                                </p>
+                                {profile.bio_extended && (
+                                    <p className="leading-relaxed text-slate-400">
+                                        {profile.bio_extended}
+                                    </p>
+                                )}
+                            </div>
+                            <div
+                                ref={bioStatsRef}
+                                className="bio-reveal grid grid-cols-2 gap-4 md:grid-cols-4"
+                            >
+                                {stats.map((stat, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="stat-item group relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/40 p-5 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-cyan-500/30 hover:bg-slate-900/60 hover:shadow-[0_10px_40px_rgba(6,182,212,0.1)]"
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-cyan-500/0 transition-all duration-300 group-hover:from-cyan-500/5 group-hover:to-transparent"></div>
+                                        <div className="relative z-10">
+                                            <div className="mb-2 text-3xl font-bold text-white transition-colors group-hover:text-cyan-400">
+                                                {stat.value}
+                                            </div>
+                                            <div className="font-mono text-xs tracking-wider text-slate-500 uppercase">
+                                                {stat.label}
+                                            </div>
+                                        </div>
+                                        <div className="absolute -right-2 -bottom-2 text-4xl text-white/5 transition-all duration-300 group-hover:text-cyan-500/10">
+                                            {stat.icon || (
+                                                <ThunderboltOutlined />
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="bio-reveal flex flex-wrap gap-4 pt-4">
+                                <a
+                                    href="#experience"
+                                    className="group relative inline-flex items-center gap-3 overflow-hidden rounded-full bg-gradient-to-r from-cyan-600 to-cyan-500 px-8 py-4 font-bold text-white shadow-lg shadow-cyan-500/25 transition-all duration-300 hover:shadow-cyan-500/40"
+                                >
+                                    <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-700 group-hover:translate-x-full"></div>
+                                    <span className="relative">
+                                        View My Journey
+                                    </span>
+                                    <RocketOutlined className="relative transition-transform group-hover:translate-x-1" />
+                                </a>
+                                <a
+                                    href="#contact"
+                                    className="group inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-8 py-4 font-bold text-slate-300 backdrop-blur-sm transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                                >
+                                    <span>Let's Connect</span>
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs transition-all group-hover:bg-cyan-500/20 group-hover:text-cyan-400">
+                                        →
+                                    </span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <style>{`@keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }`}</style>
+            </section>
+
+            {/* ⭐ EXPERIENCE TIMELINE - NOW SECTION 01 */}
+            <section
+                id="experience"
+                className="relative z-10 border-b border-white/5 bg-[#020617]/90 px-6 py-32 backdrop-blur-sm"
+            >
+                <div className="mx-auto max-w-7xl">
+                    <div className="reveal-section mb-16 flex items-center gap-4">
+                        <span className="block font-mono text-2xl font-bold tracking-widest text-green-500">
+                            01 / Experience
+                        </span>
+                        <div className="h-[1px] flex-grow bg-slate-800"></div>
+                    </div>
+
+                    <div className="relative">
+                        <div className="absolute top-0 bottom-0 left-8 w-[2px] bg-gradient-to-b from-green-500/50 via-cyan-500/30 to-transparent md:left-12"></div>
+                        <div className="space-y-12">
+                            {experiences.map((exp, idx) => (
+                                <Link
+                                    href={route(
+                                        'portfolio.experience.show',
+                                        exp.slug,
+                                    )}
+                                    key={exp.id}
+                                    className="reveal-section group relative block"
+                                >
+                                    <div className="absolute top-8 left-8 z-20 flex h-4 w-4 -translate-x-1/2 items-center justify-center md:left-12">
+                                        <span className="absolute h-full w-full animate-ping rounded-full bg-green-500 opacity-75 group-hover:bg-cyan-500"></span>
+                                        <span
+                                            className={`relative h-3 w-3 rounded-full ${exp.is_current ? 'bg-green-500' : 'bg-cyan-600'} ring-4 ring-slate-900 transition-all duration-300 group-hover:scale-125 group-hover:ring-green-500/30`}
+                                        ></span>
+                                    </div>
+                                    <div className="ml-16 overflow-hidden rounded-xl border border-white/10 bg-slate-900/40 backdrop-blur-md transition-all duration-500 hover:-translate-y-2 hover:border-green-500/50 hover:bg-slate-900/60 hover:shadow-[0_0_40px_rgba(34,197,94,0.2)] md:ml-24">
+                                        <div className="h-1 w-0 bg-gradient-to-r from-green-500 via-cyan-500 to-purple-500 transition-all duration-300 group-hover:w-full"></div>
+                                        <div className="flex flex-col gap-6 p-6 md:flex-row md:items-start md:gap-8">
+                                            <div className="flex-shrink-0">
+                                                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-slate-950 p-2 transition-all duration-300 group-hover:border-green-500/50 group-hover:shadow-[0_0_30px_rgba(34,197,94,0.3)]">
+                                                    {exp.company_logo ? (
+                                                        <img
+                                                            src={
+                                                                exp.company_logo
+                                                            }
+                                                            alt={
+                                                                exp.company_name
+                                                            }
+                                                            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-110"
+                                                        />
+                                                    ) : (
+                                                        <span className="text-2xl font-bold text-green-500">
+                                                            {exp.company_name.charAt(
+                                                                0,
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 space-y-3">
+                                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                                    <div>
+                                                        <h3 className="relative text-xl font-bold text-white transition-colors group-hover:text-green-400">
+                                                            {exp.position}
+                                                            <span className="absolute -bottom-1 left-0 h-[2px] w-0 bg-gradient-to-r from-green-500 to-cyan-500 transition-all duration-300 group-hover:w-full"></span>
+                                                        </h3>
+                                                        <p className="mt-1 font-mono text-sm text-slate-400">
+                                                            {exp.company_name}
+                                                        </p>
+                                                    </div>
+                                                    {exp.is_featured && (
+                                                        <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 font-mono text-xs text-yellow-400">
+                                                            ⭐ Featured
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-wrap gap-3 font-mono text-xs">
+                                                    <span
+                                                        className={`flex items-center gap-1.5 rounded border px-2.5 py-1 ${exp.employment_type_color === 'green' ? 'border-green-500/30 bg-green-500/10 text-green-400' : exp.employment_type_color === 'cyan' ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400' : exp.employment_type_color === 'purple' ? 'border-purple-500/30 bg-purple-500/10 text-purple-400' : 'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}
+                                                    >
+                                                        {
+                                                            exp.employment_type_label
+                                                        }
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-slate-500">
+                                                        <CalendarOutlined className="text-green-500" />
+                                                        {exp.formatted_duration}
+                                                    </span>
+                                                    <span className="flex items-center gap-1.5 text-slate-500">
+                                                        📍 {exp.location}
+                                                        {exp.is_remote &&
+                                                            ' (Remote)'}
+                                                    </span>
+                                                </div>
+                                                <p className="line-clamp-2 font-['Inter'] text-sm leading-relaxed text-slate-400">
+                                                    {exp.description}
+                                                </p>
+                                                {exp.tech_stack?.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 pt-2">
+                                                        {exp.tech_stack
+                                                            .slice(0, 5)
+                                                            .map((tech, i) => (
+                                                                <span
+                                                                    key={i}
+                                                                    className="rounded border border-green-500/20 bg-green-500/5 px-2 py-1 text-[10px] font-bold text-green-400 uppercase"
+                                                                >
+                                                                    {tech}
+                                                                </span>
+                                                            ))}
+                                                        {exp.tech_stack.length >
+                                                            5 && (
+                                                            <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold text-slate-500">
+                                                                +
+                                                                {exp.tech_stack
+                                                                    .length -
+                                                                    5}{' '}
+                                                                more
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center gap-2 pt-2 font-mono text-sm font-bold text-slate-500 transition-colors group-hover:text-green-400">
+                                                    <span>View Details</span>
+                                                    <ArrowRightOutlined className="-translate-x-2 opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {(idx === 0 ||
+                                        exp.display_date !==
+                                            experiences[idx - 1]
+                                                ?.display_date) && (
+                                        <div className="absolute top-0 left-0 -translate-y-8 font-mono text-xs font-bold text-slate-700 md:left-12 md:-translate-x-20">
+                                            {exp.display_date}
+                                        </div>
+                                    )}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* PROJECTS SECTION - NOW SECTION 02 */}
             <section id="projects" className="relative z-10 px-6 py-32">
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-16 flex flex-col items-end justify-between gap-4 md:flex-row">
                         <div>
                             <span className="mb-4 block font-mono text-2xl font-bold tracking-widest text-cyan-500">
-                                01 / Portfolio
+                                02 / Portfolio
                             </span>
                             <h2 className="text-5xl font-bold text-white">
                                 Selected Works
@@ -520,8 +803,8 @@ export default function PortfolioIndex({
                         ))}
                     </div>
 
-                    <div className="reveal-section mt-16 text-center">
-                        {nextPageUrl && (
+                    {nextPageUrl && (
+                        <div className="reveal-section mt-16 text-center">
                             <button
                                 onClick={handleLoadMore}
                                 disabled={isLoadingMore}
@@ -535,58 +818,43 @@ export default function PortfolioIndex({
                                 <span className="absolute top-0 left-0 h-2 w-2 border-t border-l border-cyan-500"></span>
                                 <span className="absolute right-0 bottom-0 h-2 w-2 border-r border-b border-cyan-500"></span>
                             </button>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </section>
 
-            {/* CERTIFICATES */}
+            {/* CERTIFICATES - NOW SECTION 03 */}
             <section className="relative z-10 border-y border-white/5 bg-[#0a0f1e]/80 px-6 py-32 backdrop-blur-sm">
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-12 flex items-center gap-4">
                         <span className="block font-mono text-2xl font-bold tracking-widest text-indigo-500">
-                            02 / Certifications
+                            03 / Certifications
                         </span>
                         <div className="h-[1px] flex-grow bg-slate-800"></div>
                     </div>
-
                     <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                         {certificates.map((cert) => {
                             const isFilePDF = isPDF(cert.image);
                             const thumbnail = getCertificateThumbnail(cert);
-
                             return (
                                 <div
                                     key={cert.id}
-                                    // PERBAIKAN DI SINI:
-                                    // Hapus if-else window.open. Kita paksa semua masuk ke setPreviewCert.
                                     onClick={() => {
                                         setPreviewCert(cert);
                                         setPdfError(false);
                                     }}
                                     className="reveal-section group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-slate-900 transition-all duration-500 hover:-translate-y-1 hover:border-indigo-500/50 hover:shadow-[0_0_40px_rgba(99,102,241,0.25)]"
                                 >
-                                    {/* Card content sama seperti sebelumnya */}
                                     <div className="absolute inset-0 h-full w-full bg-slate-950">
                                         {thumbnail ? (
-                                            <div className="relative h-full w-full">
-                                                <img
-                                                    src={thumbnail}
-                                                    alt={cert.title}
-                                                    className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100"
-                                                />
-                                            </div>
+                                            <img
+                                                src={thumbnail}
+                                                alt={cert.title}
+                                                className="h-full w-full object-cover opacity-80 transition-transform duration-700 group-hover:scale-110 group-hover:opacity-100"
+                                            />
                                         ) : (
                                             <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-indigo-900/30 via-slate-900 to-slate-950">
-                                                <svg
-                                                    viewBox="64 64 896 896"
-                                                    width="80"
-                                                    height="80"
-                                                    fill="currentColor"
-                                                    className="text-indigo-400 opacity-40"
-                                                >
-                                                    <path d="M854.6 288.6L639.4 73.4c-6-6-14.1-9.4-22.6-9.4H192c-17.7 0-32 14.3-32 32v832c0 17.7 14.3 32 32 32h640c17.7 0 32-14.3 32-32V311.3c0-8.5-3.4-16.7-9.4-22.7zM790.2 326H602V137.8L790.2 326zm1.8 562H232V136h302v216a42 42 0 0 0 42 42h216v494z"></path>
-                                                </svg>
+                                                <FileOutlined className="text-6xl text-indigo-400 opacity-40" />
                                                 <p className="mt-4 font-mono text-xs text-indigo-300/60">
                                                     PDF CERTIFICATE
                                                 </p>
@@ -594,21 +862,10 @@ export default function PortfolioIndex({
                                         )}
                                         <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/80 to-transparent"></div>
                                     </div>
-
-                                    {/* Info overlay - sama seperti sebelumnya */}
                                     <div className="absolute bottom-0 left-0 z-20 w-full p-6">
-                                        {/* Badge */}
                                         <div className="mb-3 flex items-center justify-between">
                                             <div className="flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 backdrop-blur-md">
-                                                <svg
-                                                    viewBox="64 64 896 896"
-                                                    width="12"
-                                                    height="12"
-                                                    fill="currentColor"
-                                                    className="text-indigo-400"
-                                                >
-                                                    <path d="M866.9 169.9L527.1 54.1C523 52.7 517.5 52 512 52s-11 .7-15.1 2.1L157.1 169.9c-8.3 2.8-15.1 12.4-15.1 21.2v482.4c0 8.8 5.7 20.4 12.6 25.9L499.3 968c3.5 2.7 8 4.1 12.6 4.1s9.2-1.4 12.6-4.1l344.7-268.6c6.9-5.4 12.6-17 12.6-25.9V191.1c.2-8.8-6.6-18.3-14.9-21.2zM810 654.3L512 886.5 214 654.3V226.7l298-101.6 298 101.6v427.6zm-405.8-201c-3-4.1-7.8-6.6-13-6.6H336c-6.5 0-10.3 7.4-6.5 12.7l126.4 174a16.1 16.1 0 0 0 26 0l212.6-292.7c3.8-5.3 0-12.7-6.5-12.7h-55.2c-5.1 0-10 2.5-13 6.6L468.9 542.4l-64.7-89.1z"></path>
-                                                </svg>
+                                                <SafetyCertificateOutlined className="text-xs text-indigo-400" />
                                                 <span className="font-mono text-[10px] tracking-wider text-indigo-300">
                                                     {isFilePDF
                                                         ? 'PDF • CLICK TO OPEN'
@@ -616,13 +873,9 @@ export default function PortfolioIndex({
                                                 </span>
                                             </div>
                                         </div>
-
-                                        {/* Title */}
                                         <h4 className="mb-1 line-clamp-2 text-lg font-bold text-white transition-colors group-hover:text-indigo-200">
                                             {cert.title}
                                         </h4>
-
-                                        {/* Meta info */}
                                         <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-2">
                                             <p className="font-mono text-xs text-slate-400 uppercase transition-colors group-hover:text-white">
                                                 {cert.issuer}
@@ -630,100 +883,6 @@ export default function PortfolioIndex({
                                             <span className="font-mono text-[10px] text-slate-600 group-hover:text-indigo-400">
                                                 {cert.issued_date}
                                             </span>
-                                        </div>
-
-                                        {/* Credential ID */}
-                                        {cert.credential_id && (
-                                            <div className="mt-2 flex items-center gap-1 rounded border border-white/5 bg-black/30 px-2 py-1.5 backdrop-blur-sm">
-                                                <span className="font-mono text-[9px] text-slate-500">
-                                                    ID:
-                                                </span>
-                                                <span className="font-mono text-[10px] font-semibold text-indigo-400">
-                                                    {cert.credential_id}
-                                                </span>
-                                            </div>
-                                        )}
-
-                                        {/* Action Buttons */}
-                                        <div className="mt-3 flex gap-2 border-t border-white/5 pt-3">
-                                            {isFilePDF ? (
-                                                // PDF: Show Open & Download buttons
-                                                <>
-                                                    <div className="flex flex-1 items-center justify-center gap-2 rounded border border-indigo-500/30 bg-indigo-500/5 px-3 py-2 font-mono text-xs text-indigo-300 backdrop-blur-sm transition-all group-hover:bg-indigo-500/20">
-                                                        <svg
-                                                            viewBox="64 64 896 896"
-                                                            width="14"
-                                                            height="14"
-                                                            fill="currentColor"
-                                                        >
-                                                            <path d="M880 112H144c-17.7 0-32 14.3-32 32v736c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V144c0-17.7-14.3-32-32-32zm-40 728H184V184h656v656zM304.8 524h50.7c3.7 0 6.8-3 6.8-6.8v-78.9c0-19.7 15.9-35.6 35.5-35.6h205.7v53.4c0 5.7 6.5 8.8 10.9 5.3l109.1-85.7c3.5-2.7 3.5-8 0-10.7l-109.1-85.7c-4.4-3.5-10.9-.3-10.9 5.3V338H397.7c-55.2 0-100.1 44.9-100.1 100.1v78.9c0 3.7 3.1 6.8 6.8 6.8l.4.2zm-4.2 134.9l109.1 85.7c4.4 3.5 10.9.3 10.9-5.3v-53.4h205.7c55.2 0 100.1-44.9 100.1-100.1v-78.9c0-3.7-3-6.8-6.8-6.8h-50.7c-3.7 0-6.8 3-6.8 6.8v78.9c0 19.7-15.9 35.6-35.5 35.6H420.6V568c0-5.7-6.5-8.8-10.9-5.3l-109.1 85.7c-3.5 2.5-3.5 7.8 0 10.5z"></path>
-                                                        </svg>
-                                                        <span>Open</span>
-                                                    </div>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDownloadPDF(
-                                                                cert.image,
-                                                                `${cert.title}.pdf`,
-                                                            );
-                                                        }}
-                                                        className="flex flex-1 items-center justify-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 font-mono text-xs text-cyan-300 backdrop-blur-sm transition-all hover:bg-cyan-500/20 hover:text-white"
-                                                    >
-                                                        <svg
-                                                            viewBox="64 64 896 896"
-                                                            width="14"
-                                                            height="14"
-                                                            fill="currentColor"
-                                                        >
-                                                            <path d="M505.7 661a8 8 0 0 0 12.6 0l112-141.7c4.1-5.2.4-12.9-6.3-12.9h-74.1V168c0-4.4-3.6-8-8-8h-60c-4.4 0-8 3.6-8 8v338.3H400c-6.7 0-10.4 7.7-6.3 12.9l112 141.8zM878 626h-60c-4.4 0-8 3.6-8 8v154H214V634c0-4.4-3.6-8-8-8h-60c-4.4 0-8 3.6-8 8v198c0 17.7 14.3 32 32 32h684c17.7 0 32-14.3 32-32V634c0-4.4-3.6-8-8-8z"></path>
-                                                        </svg>
-                                                        <span>Download</span>
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                // Image: Show View button
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setPreviewCert(cert);
-                                                    }}
-                                                    className="flex flex-1 items-center justify-center gap-2 rounded border border-indigo-500/30 bg-indigo-500/5 px-3 py-2 font-mono text-xs text-indigo-300 backdrop-blur-sm transition-all hover:bg-indigo-500/20 hover:text-white"
-                                                >
-                                                    <svg
-                                                        viewBox="64 64 896 896"
-                                                        width="14"
-                                                        height="14"
-                                                        fill="currentColor"
-                                                    >
-                                                        <path d="M880 112H144c-17.7 0-32 14.3-32 32v736c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V144c0-17.7-14.3-32-32-32zm-40 728H184V184h656v656zM304.8 524h50.7c3.7 0 6.8-3 6.8-6.8v-78.9c0-19.7 15.9-35.6 35.5-35.6h205.7v53.4c0 5.7 6.5 8.8 10.9 5.3l109.1-85.7c3.5-2.7 3.5-8 0-10.7l-109.1-85.7c-4.4-3.5-10.9-.3-10.9 5.3V338H397.7c-55.2 0-100.1 44.9-100.1 100.1v78.9c0 3.7 3.1 6.8 6.8 6.8l.4.2z"></path>
-                                                    </svg>
-                                                    <span>View</span>
-                                                </button>
-                                            )}
-
-                                            {/* Verify button (if credential URL exists) */}
-                                            {cert.credential_url && (
-                                                <a
-                                                    href={cert.credential_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    onClick={(e) =>
-                                                        e.stopPropagation()
-                                                    }
-                                                    className="flex flex-1 items-center justify-center gap-2 rounded border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 font-mono text-xs text-cyan-300 backdrop-blur-sm transition-all hover:bg-cyan-500/20 hover:text-white"
-                                                >
-                                                    <svg
-                                                        viewBox="64 64 896 896"
-                                                        width="14"
-                                                        height="14"
-                                                        fill="currentColor"
-                                                    >
-                                                        <path d="M866.9 169.9L527.1 54.1C523 52.7 517.5 52 512 52s-11 .7-15.1 2.1L157.1 169.9c-8.3 2.8-15.1 12.4-15.1 21.2v482.4c0 8.8 5.7 20.4 12.6 25.9L499.3 968c3.5 2.7 8 4.1 12.6 4.1s9.2-1.4 12.6-4.1l344.7-268.6c6.9-5.4 12.6-17 12.6-25.9V191.1c.2-8.8-6.6-18.3-14.9-21.2zM810 654.3L512 886.5 214 654.3V226.7l298-101.6 298 101.6v427.6zm-405.8-201c-3-4.1-7.8-6.6-13-6.6H336c-6.5 0-10.3 7.4-6.5 12.7l126.4 174a16.1 16.1 0 0 0 26 0l212.6-292.7c3.8-5.3 0-12.7-6.5-12.7h-55.2c-5.1 0-10 2.5-13 6.6L468.9 542.4l-64.7-89.1z"></path>
-                                                    </svg>
-                                                    <span>Verify</span>
-                                                </a>
-                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -733,13 +892,13 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* BLOGS SECTION */}
+            {/* BLOGS SECTION - NOW SECTION 04 */}
             <section id="insights" className="relative z-10 px-6 py-32">
                 <div className="mx-auto max-w-7xl">
                     <div className="reveal-section mb-16 flex items-end justify-between gap-4">
                         <div>
                             <span className="mb-2 block font-mono text-2xl font-bold tracking-widest text-pink-500">
-                                03 / Blog
+                                04 / Blog
                             </span>
                             <h2 className="text-5xl font-bold text-white">
                                 Recent Articles
@@ -747,7 +906,6 @@ export default function PortfolioIndex({
                         </div>
                         <div className="h-[1px] flex-grow bg-slate-800 md:mx-8"></div>
                     </div>
-
                     <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
                         {recent_blogs.map((blog) => (
                             <Link
@@ -783,7 +941,7 @@ export default function PortfolioIndex({
                 </div>
             </section>
 
-            {/* CONTACT SECTION */}
+            {/* CONTACT SECTION - NOW SECTION 05 */}
             <section
                 id="contact"
                 ref={contactSectionRef}
@@ -792,7 +950,7 @@ export default function PortfolioIndex({
                 <div className="mx-auto max-w-4xl">
                     <div className="reveal-section mb-16 text-center">
                         <span className="font-mono text-sm tracking-widest text-cyan-500">
-                            04 / Contact
+                            05 / Contact
                         </span>
                         <h2 className="mt-4 text-4xl font-bold text-white md:text-5xl">
                             Let's Work Together
@@ -802,11 +960,9 @@ export default function PortfolioIndex({
                             discuss how we can collaborate.
                         </p>
                     </div>
-
                     <div className="reveal-section space-y-8 rounded-2xl border border-white/5 bg-slate-900/30 p-8 backdrop-blur-sm md:p-12">
-                        {/* SUCCESS MESSAGE */}
                         {flash?.success && (
-                            <div className="animate-fadeIn rounded-lg border border-green-500/30 bg-green-500/10 p-6 backdrop-blur-sm">
+                            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-6 backdrop-blur-sm">
                                 <div className="flex items-start gap-4">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-500/20">
                                         <span className="text-2xl">✅</span>
@@ -822,10 +978,8 @@ export default function PortfolioIndex({
                                 </div>
                             </div>
                         )}
-
-                        {/* ERROR MESSAGES */}
                         {Object.keys(errors).length > 0 && (
-                            <div className="animate-shake rounded-lg border border-red-500/30 bg-red-500/10 p-6 backdrop-blur-sm">
+                            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-6 backdrop-blur-sm">
                                 <div className="flex items-start gap-4">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20">
                                         <span className="text-xl">⚠️</span>
@@ -850,13 +1004,10 @@ export default function PortfolioIndex({
                                 </div>
                             </div>
                         )}
-
-                        {/* FORM */}
                         <div className="grid gap-8 md:grid-cols-2">
-                            <div className="group">
+                            <div>
                                 <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-sm text-cyan-500">
-                                    Name
-                                    <span className="text-red-400">*</span>
+                                    Name<span className="text-red-400">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -864,16 +1015,11 @@ export default function PortfolioIndex({
                                     onChange={(e) =>
                                         setData('name', e.target.value)
                                     }
-                                    className={`w-full border-b ${
-                                        errors.name
-                                            ? 'border-red-500 bg-red-500/5'
-                                            : 'border-white/20'
-                                    } bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
+                                    className={`w-full border-b ${errors.name ? 'border-red-500 bg-red-500/5' : 'border-white/20'} bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
                                     placeholder="John Doe"
-                                    required
                                 />
                             </div>
-                            <div className="group">
+                            <div>
                                 <label className="mb-2 ml-1 block font-mono text-sm text-cyan-500">
                                     Phone
                                 </label>
@@ -888,11 +1034,9 @@ export default function PortfolioIndex({
                                 />
                             </div>
                         </div>
-
-                        <div className="group">
+                        <div>
                             <label className="mb-2 ml-1 flex items-center gap-2 font-mono text-sm text-cyan-500">
-                                Email
-                                <span className="text-red-400">*</span>
+                                Email<span className="text-red-400">*</span>
                             </label>
                             <input
                                 type="email"
@@ -900,28 +1044,18 @@ export default function PortfolioIndex({
                                 onChange={(e) =>
                                     setData('email', e.target.value)
                                 }
-                                className={`w-full border-b ${
-                                    errors.email
-                                        ? 'border-red-500 bg-red-500/5'
-                                        : 'border-white/20'
-                                } bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
+                                className={`w-full border-b ${errors.email ? 'border-red-500 bg-red-500/5' : 'border-white/20'} bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
                                 placeholder="john@example.com"
-                                required
                             />
                         </div>
-
-                        <div className="group">
+                        <div>
                             <label className="mb-2 ml-1 flex items-center justify-between">
                                 <div className="flex items-center gap-2 font-mono text-sm text-cyan-500">
                                     Message
                                     <span className="text-red-400">*</span>
                                 </div>
                                 <span
-                                    className={`font-mono text-[10px] ${
-                                        data.message.length > 2000
-                                            ? 'text-red-400'
-                                            : 'text-slate-600'
-                                    }`}
+                                    className={`font-mono text-[10px] ${data.message.length > 2000 ? 'text-red-400' : 'text-slate-600'}`}
                                 >
                                     {data.message.length}/2000
                                 </span>
@@ -933,16 +1067,10 @@ export default function PortfolioIndex({
                                     setData('message', e.target.value)
                                 }
                                 maxLength={2000}
-                                className={`w-full border-b ${
-                                    errors.message
-                                        ? 'border-red-500 bg-red-500/5'
-                                        : 'border-white/20'
-                                } bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
+                                className={`w-full border-b ${errors.message ? 'border-red-500 bg-red-500/5' : 'border-white/20'} bg-slate-950 px-4 py-3 text-white transition-all placeholder:text-slate-700 focus:border-cyan-500 focus:bg-slate-900/50 focus:outline-none`}
                                 placeholder="Tell me about your project..."
-                                required
                             />
                         </div>
-
                         <div className="flex items-center justify-between border-t border-white/5 pt-6">
                             <p className="font-mono text-xs text-slate-600">
                                 <span className="text-red-400">*</span> Required
@@ -1030,78 +1158,52 @@ export default function PortfolioIndex({
             >
                 {previewCert && (
                     <div className="relative">
-                        {/* Header */}
                         <div className="border-b border-white/10 bg-slate-900/50 p-6 backdrop-blur-sm">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                    <div className="mb-2 flex items-center gap-2">
-                                        <SafetyCertificateOutlined className="text-indigo-400" />
-                                        <span className="font-mono text-xs text-indigo-400 uppercase">
-                                            {isPDF(previewCert.image)
-                                                ? 'PDF Certificate'
-                                                : 'Image Certificate'}
-                                        </span>
-                                    </div>
-                                    <h3 className="mb-2 text-2xl font-bold text-white">
-                                        {previewCert.title}
-                                    </h3>
-                                    <div className="flex flex-wrap items-center gap-4 text-sm">
-                                        <span className="font-mono text-slate-400">
-                                            <span className="text-slate-600">
-                                                Issued by:
-                                            </span>{' '}
-                                            <span className="text-white">
-                                                {previewCert.issuer}
-                                            </span>
-                                        </span>
-                                        <span className="h-1 w-1 rounded-full bg-slate-700"></span>
-                                        <span className="font-mono text-slate-400">
-                                            <span className="text-slate-600">
-                                                Date:
-                                            </span>{' '}
-                                            <span className="text-white">
-                                                {previewCert.issued_date}
-                                            </span>
-                                        </span>
-                                        {previewCert.credential_id && (
-                                            <>
-                                                <span className="h-1 w-1 rounded-full bg-slate-700"></span>
-                                                <span className="font-mono text-slate-400">
-                                                    <span className="text-slate-600">
-                                                        ID:
-                                                    </span>{' '}
-                                                    <span className="text-indigo-400">
-                                                        {
-                                                            previewCert.credential_id
-                                                        }
-                                                    </span>
-                                                </span>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Action Buttons */}
+                            <div className="mb-2 flex items-center gap-2">
+                                <SafetyCertificateOutlined className="text-indigo-400" />
+                                <span className="font-mono text-xs text-indigo-400 uppercase">
+                                    {isPDF(previewCert.image)
+                                        ? 'PDF Certificate'
+                                        : 'Image Certificate'}
+                                </span>
+                            </div>
+                            <h3 className="mb-2 text-2xl font-bold text-white">
+                                {previewCert.title}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-4 text-sm">
+                                <span className="font-mono text-slate-400">
+                                    <span className="text-slate-600">
+                                        Issued by:
+                                    </span>{' '}
+                                    <span className="text-white">
+                                        {previewCert.issuer}
+                                    </span>
+                                </span>
+                                <span className="h-1 w-1 rounded-full bg-slate-700"></span>
+                                <span className="font-mono text-slate-400">
+                                    <span className="text-slate-600">
+                                        Date:
+                                    </span>{' '}
+                                    <span className="text-white">
+                                        {previewCert.issued_date}
+                                    </span>
+                                </span>
                             </div>
                         </div>
-
-                        {/* Preview Content */}
                         <div className="p-6">
                             {isPDF(previewCert.image) ? (
                                 <div className="space-y-4">
-                                    {/* MENGGUNAKAN NATIVE OBJECT AGAR LEBIH CEPAT & STABIL DIBANDING GOOGLE DOCS */}
                                     <div className="relative h-[70vh] w-full overflow-hidden rounded-lg border border-white/10 bg-slate-950">
                                         <object
                                             data={previewCert.image}
                                             type="application/pdf"
                                             className="h-full w-full"
                                         >
-                                            {/* Fallback: Ini muncul HANYA jika browser tidak support PDF preview */}
                                             <div className="flex h-full flex-col items-center justify-center space-y-4 p-8 text-center">
                                                 <FileOutlined className="text-4xl text-slate-500" />
                                                 <p className="text-slate-400">
-                                                    Browser Anda tidak mendukung
-                                                    preview PDF langsung.
+                                                    Browser tidak mendukung
+                                                    preview PDF.
                                                 </p>
                                                 <button
                                                     onClick={() =>
@@ -1110,58 +1212,42 @@ export default function PortfolioIndex({
                                                             `${previewCert.title}.pdf`,
                                                         )
                                                     }
-                                                    className="rounded-full bg-cyan-600 px-6 py-2 font-bold text-white transition hover:bg-cyan-500"
+                                                    className="rounded-full bg-cyan-600 px-6 py-2 font-bold text-white hover:bg-cyan-500"
                                                 >
                                                     Download PDF
                                                 </button>
                                             </div>
                                         </object>
                                     </div>
-
-                                    {/* Tombol Action Tambahan di Bawah Preview (Agar User Selalu Punya Opsi) */}
-                                    <div className="flex justify-end gap-3 pt-2">
-                                        <div className="flex justify-end gap-2">
-                                            {isPDF(previewCert.image) && (
-                                                <button
-                                                    onClick={() =>
-                                                        handleDownloadPDF(
-                                                            previewCert.image,
-                                                            `${previewCert.title}.pdf`,
-                                                        )
-                                                    }
-                                                    className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 font-mono text-sm text-cyan-300 transition-all hover:bg-cyan-500/20 hover:text-white"
-                                                >
-                                                    <DownloadOutlined />
-                                                    Download
-                                                </button>
-                                            )}
-                                            {previewCert.credential_url && (
-                                                <a
-                                                    href={
-                                                        previewCert.credential_url
-                                                    }
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 font-mono text-sm text-indigo-300 transition-all hover:bg-indigo-500/20 hover:text-white"
-                                                >
-                                                    <SafetyCertificateOutlined />
-                                                    Verify 
-                                                </a>
-                                            )}
-                                        </div>
-                                        {/* <a
-                                            href={previewCert.image}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-bold text-white hover:bg-white/10"
+                                    <div className="flex justify-end gap-2">
+                                        <button
+                                            onClick={() =>
+                                                handleDownloadPDF(
+                                                    previewCert.image,
+                                                    `${previewCert.title}.pdf`,
+                                                )
+                                            }
+                                            className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 font-mono text-sm text-cyan-300 hover:bg-cyan-500/20"
                                         >
-                                            <SendOutlined className="-rotate-45" />{' '}
-                                            Open New Tab
-                                        </a> */}
+                                            <DownloadOutlined />
+                                            Download
+                                        </button>
+                                        {previewCert.credential_url && (
+                                            <a
+                                                href={
+                                                    previewCert.credential_url
+                                                }
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 font-mono text-sm text-indigo-300 hover:bg-indigo-500/20"
+                                            >
+                                                <SafetyCertificateOutlined />
+                                                Verify
+                                            </a>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
-                                // Logic Image Preview (Biarkan Tetap Sama)
                                 <div className="rounded-lg border border-white/10 bg-black/50 p-2">
                                     <img
                                         src={previewCert.image}
@@ -1170,29 +1256,6 @@ export default function PortfolioIndex({
                                     />
                                 </div>
                             )}
-
-                            {/* Tags if available */}
-                            {previewCert.tags &&
-                                previewCert.tags.length > 0 && (
-                                    <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-4">
-                                        <span className="font-mono text-xs text-slate-500">
-                                            Tags:
-                                        </span>
-                                        {previewCert.tags.map((tag) => (
-                                            <span
-                                                key={tag.id}
-                                                className="rounded-full px-3 py-1 text-xs font-bold"
-                                                style={{
-                                                    backgroundColor: `${tag.color}20`,
-                                                    color: tag.color,
-                                                    border: `1px solid ${tag.color}40`,
-                                                }}
-                                            >
-                                                {tag.name}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
                         </div>
                     </div>
                 )}

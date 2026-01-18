@@ -6,6 +6,7 @@ use App\Mail\ContactFormMail;
 use App\Models\BlogPost;
 use App\Models\Certificate;
 use App\Models\Contact;
+use App\Models\Experience;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -20,9 +21,6 @@ class PortfolioController extends Controller
     public function index(): Response
     {
         $data = [
-            // ==========================================
-            // 1. PROJECTS (✅ OPTIMIZED: Hapus unused eager loading)
-            // ==========================================
             'projects' => Project::whereIn('status', ['completed', 'ongoing'])
                 ->latest('started_at')
                 ->paginate(6)
@@ -41,10 +39,35 @@ class PortfolioController extends Controller
                     ];
                 }),
 
-            // ==========================================
-            // 2. CERTIFICATES (✅ OPTIMIZED: Pakai Cache 24 jam)
-            // ==========================================
-            'certificates' => Certificate::with('tags') // Tetap pakai Eager Loading
+            'experiences' => Cache::remember('experiences:published', now()->addHours(6), function () {
+                return Experience::published()
+                    ->timeline()
+                    ->get()
+                    ->map(function ($exp) {
+                        return [
+                            'id' => $exp->id,
+                            'slug' => $exp->slug,
+                            'company_name' => $exp->company_name,
+                            'company_logo' => $exp->company_logo,
+                            'position' => $exp->position,
+                            'employment_type' => $exp->employment_type,
+                            'employment_type_label' => $exp->getEmploymentTypeLabel(),
+                            'employment_type_color' => $exp->getEmploymentTypeColor(),
+                            'description' => $exp->description,
+                            'location' => $exp->location,
+                            'is_remote' => $exp->is_remote,
+                            'is_current' => $exp->is_current,
+                            'formatted_duration' => $exp->formatted_duration,
+                            'duration_in_months' => $exp->duration_in_months,
+                            'display_date' => $exp->display_date,
+                            'tech_stack' => $exp->tech_stack ?? [],
+                            'metrics' => $exp->metrics ?? [],
+                            'is_featured' => $exp->is_featured,
+                        ];
+                    });
+            }),
+
+            'certificates' => Certificate::with('tags')
                 ->latest('issued_at')
                 ->get()
                 ->map(function ($cert) {
@@ -56,8 +79,6 @@ class PortfolioController extends Controller
                         'image' => $cert->image_full_url,
                         'credential_id' => $cert->credential_id,
                         'credential_url' => $cert->credential_url,
-
-                        // Mapping Tags
                         'tags' => $cert->tags->map(function ($tag) {
                             return [
                                 'id' => $tag->id,
@@ -68,9 +89,6 @@ class PortfolioController extends Controller
                     ];
                 }),
 
-            // ==========================================
-            // 3. BLOGS (✅ OPTIMIZED: Pakai scope)
-            // ==========================================
             'recent_blogs' => BlogPost::withProjectData()
                 ->published()
                 ->latest()
@@ -88,18 +106,24 @@ class PortfolioController extends Controller
                     ];
                 }),
 
-            // ==========================================
-            // 4. PROFILE (✅ OPTIMIZED: Cache 7 hari)
-            // ==========================================
+            // ✅ ENHANCED: Professional bio berdasarkan CV
             'profile' => Cache::remember('profile:data', now()->addWeek(), function () {
                 return [
-                    'name' => 'Andrew Lie',
-                    'bio' => 'Building robust web applications with Laravel, Inertia, and React.',
-                    'avatar' => 'https://ui-avatars.com/api/?name=Andrew+Lie&background=0D8ABC&color=fff',
+                    'name' => 'Andrew Alfonso Lie',
+                    'title' => 'Frontend Lead & Full-Stack Developer',
+                    'bio' => 'Transforming complex business challenges into elegant digital solutions. As Frontend Lead at BINUS IT Division, I architect enterprise-level applications serving 10,000+ users. AI4Impact Scholar (0.26% acceptance rate) with expertise in full-stack development and emerging AI technologies.',
+                    'bio_extended' => 'Results-driven Computer Science student with proven expertise in full-stack web development and emerging AI technologies. Currently serving as Frontend Lead at BINUS IT Division, architecting enterprise-level applications. Selected for prestigious AI4Impact Scholarship (7/2700 applicants - 0.26% acceptance rate). Passionate about leveraging technical leadership experience and AI knowledge to drive innovation in web development.',
+                    'avatar' => 'https://ui-avatars.com/api/?name=Andrew+Lie&background=06B6D4&color=fff&size=200',
+                    'stats' => [
+                        ['label' => 'Years Experience', 'value' => '2+'],
+                        ['label' => 'Projects Completed', 'value' => '10+'],
+                        ['label' => 'Users Impacted', 'value' => '10K+'],
+                        ['label' => 'GPA', 'value' => '3.79'],
+                    ],
                     'social' => [
                         'github' => 'https://github.com/andrewlie',
-                        'linkedin' => 'https://linkedin.com/in/andrewlie',
-                        'twitter' => 'https://twitter.com/andrewlie',
+                        'linkedin' => 'https://linkedin.com/in/andrewalfonsolie',
+                        'email' => 'andrewalfonsolie16@gmail.com',
                     ],
                 ];
             }),
@@ -108,13 +132,93 @@ class PortfolioController extends Controller
         return Inertia::render('Portfolio/Index', $data);
     }
 
+    /**
+     * ✅ FIXED: Experience detail dengan gallery URLs yang benar
+     */
+    public function showExperience(string $slug): Response
+    {
+        $experience = Cache::remember("experience:{$slug}", now()->addHours(6), function () use ($slug) {
+            return Experience::where('slug', $slug)
+                ->where('is_published', true)
+                ->firstOrFail();
+        });
+
+        $relatedExperiences = Cache::remember(
+            "experience:{$slug}:related",
+            now()->addHours(6),
+            function () use ($experience) {
+                return Experience::published()
+                    ->where('id', '!=', $experience->id)
+                    ->where(function ($query) use ($experience) {
+                        $query->where('company_name', $experience->company_name);
+
+                        if ($experience->tech_stack && count($experience->tech_stack) > 0) {
+                            foreach ($experience->tech_stack as $tech) {
+                                $query->orWhereJsonContains('tech_stack', $tech);
+                            }
+                        }
+                    })
+                    ->timeline()
+                    ->limit(3)
+                    ->get()
+                    ->map(function ($exp) {
+                        return [
+                            'id' => $exp->id,
+                            'slug' => $exp->slug,
+                            'company_name' => $exp->company_name,
+                            'company_logo' => $exp->company_logo ? asset('storage/'.$exp->company_logo) : null,
+                            'position' => $exp->position,
+                            'formatted_duration' => $exp->formatted_duration,
+                            'description' => $exp->description,
+                        ];
+                    });
+            }
+        );
+
+        // ✅ Format duration yang lebih baik
+        $durationMonths = $experience->duration_in_months;
+        $durationText = $durationMonths < 1
+            ? '< 1 month'
+            : ($durationMonths == 1
+                ? '1 month'
+                : number_format($durationMonths, 1).' months');
+
+        return Inertia::render('Portfolio/ExperienceDetail', [
+            'experience' => [
+                'id' => $experience->id,
+                'slug' => $experience->slug,
+                'company_name' => $experience->company_name,
+                'company_logo' => $experience->company_logo ? asset('storage/'.$experience->company_logo) : null,
+                'position' => $experience->position,
+                'employment_type' => $experience->employment_type,
+                'employment_type_label' => $experience->getEmploymentTypeLabel(),
+                'employment_type_color' => $experience->getEmploymentTypeColor(),
+                'description' => $experience->description,
+                'detailed_description' => $experience->detailed_description,
+                'location' => $experience->location,
+                'is_remote' => $experience->is_remote,
+                'is_current' => $experience->is_current,
+                'formatted_duration' => $experience->formatted_duration,
+                'duration_in_months' => $durationMonths,
+                'duration_text' => $durationText, // ✅ NEW: Human-readable duration
+                'start_date' => $experience->start_date->format('M Y'),
+                'end_date' => $experience->is_current ? 'Present' : $experience->end_date->format('M Y'),
+                'key_achievements' => $experience->key_achievements ?? [],
+                'metrics' => $experience->metrics ?? [],
+                'tech_stack' => $experience->tech_stack ?? [],
+                'gallery' => $experience->gallery_urls, // ✅ FIXED: Gunakan full URLs
+                'is_featured' => $experience->is_featured,
+            ],
+            'related_experiences' => $relatedExperiences,
+        ]);
+    }
+
     public function show(string $slug): Response
     {
         $project = Project::where('slug', $slug)
             ->whereIn('status', ['ongoing', 'completed', 'upcoming'])
             ->firstOrFail();
 
-        // ✅ OPTIMIZED: Select hanya kolom yang dibutuhkan
         $otherProjects = Project::select(['id', 'title', 'slug', 'thumbnail_url', 'started_at'])
             ->where('id', '!=', $project->id)
             ->whereIn('status', ['ongoing', 'completed'])
@@ -152,13 +256,11 @@ class PortfolioController extends Controller
 
     public function showBlog(string $slug): Response
     {
-        // ✅ OPTIMIZED: Pakai scope withProjectData()
         $blog = BlogPost::withProjectData()
             ->where('slug', $slug)
             ->where('is_published', true)
             ->firstOrFail();
 
-        // ✅ OPTIMIZED: Gunakan query builder yang lebih efisien
         $relatedPosts = BlogPost::withProjectData()
             ->where('project_id', $blog->project_id)
             ->where('id', '!=', $blog->id)
@@ -167,7 +269,6 @@ class PortfolioController extends Controller
             ->limit(3)
             ->get();
 
-        // ✅ OPTIMIZED: Filler logic lebih clean
         if ($relatedPosts->count() < 3) {
             $needed = 3 - $relatedPosts->count();
             $existingIds = $relatedPosts->pluck('id')->push($blog->id);
@@ -182,7 +283,6 @@ class PortfolioController extends Controller
             $relatedPosts = $relatedPosts->merge($fillerPosts);
         }
 
-        // ✅ OPTIMIZED: Mapping lebih efisien
         $mappedRelated = $relatedPosts->map(function ($b) {
             return [
                 'title' => $b->title,
