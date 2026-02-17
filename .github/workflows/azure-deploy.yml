@@ -1,0 +1,96 @@
+name: Build and deploy Laravel to Azure Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Setup PHP
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo, pdo_pgsql, pgsql, bcmath, xml, curl, zip
+
+      # Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Install Composer dependencies
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      # Install NPM dependencies
+      - name: Install NPM dependencies
+        run: npm ci
+
+      # Build frontend assets
+      - name: Build frontend assets
+        run: npm run build
+
+      # Create deployment package
+      - name: Create deployment artifact
+        run: |
+          mkdir -p deployment
+          cp -r . deployment/
+          cd deployment
+          zip -r ../deployment.zip . -x "*.git*" "node_modules/*" "tests/*" ".env*"
+
+      # Upload artifact
+      - name: Upload artifact for deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: php-app
+          path: deployment.zip
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: 'Production'
+
+    steps:
+      # Download artifact
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: php-app
+
+      # Extract artifact
+      - name: Extract artifact
+        run: unzip deployment.zip
+
+      # Deploy to Azure
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'portofolio-andrew'
+          slot-name: 'Production'
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
+          package: .
+
+      # Run post-deployment commands
+      - name: Run post-deployment commands
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: 'portofolio-andrew'
+          slot-name: 'Production'
+          app-settings-json: |
+            [
+              {
+                "name": "POST_BUILD_COMMAND",
+                "value": "php artisan migrate --force && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan storage:link",
+                "slotSetting": false
+              }
+            ]
