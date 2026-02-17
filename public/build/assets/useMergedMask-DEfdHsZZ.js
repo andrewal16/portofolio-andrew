@@ -1,0 +1,1 @@
+import{a as f}from"./app-B6r_TxPj.js";const t=e=>e&&typeof e=="object"?e:typeof e=="boolean"?{enabled:e,blur:e}:{},i=(e,n,o)=>f.useMemo(()=>{const s=t(e),r={...t(n),...s},a=r.blur!==!1?`${o}-mask-blur`:void 0;return[r.enabled!==!1,{mask:a}]},[e,n,o]);export{i as u};
