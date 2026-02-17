@@ -1,9 +1,8 @@
-name: Build and deploy Laravel to Azure Web App
+name: Deploy Laravel to Azure
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -11,86 +10,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      # Setup PHP
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: mbstring, pdo, pdo_pgsql, pgsql, bcmath, xml, curl, zip
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: mbstring, pdo, pdo_pgsql, pgsql, bcmath, xml, curl, zip, gd
 
-      # Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
-      # Install Composer dependencies
-      - name: Install Composer dependencies
-        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+    - name: Copy .env
+      run: php -r "file_exists('.env') || copy('.env.example', '.env');"
 
-      # Install NPM dependencies
-      - name: Install NPM dependencies
-        run: npm ci
+    - name: Install Composer Dependencies
+      run: composer install --no-dev --optimize-autoloader --no-interaction
 
-      # Build frontend assets
-      - name: Build frontend assets
-        run: npm run build
+    - name: Install NPM Dependencies
+      run: npm ci
 
-      # Create deployment package
-      - name: Create deployment artifact
-        run: |
-          mkdir -p deployment
-          cp -r . deployment/
-          cd deployment
-          zip -r ../deployment.zip . -x "*.git*" "node_modules/*" "tests/*" ".env*"
+    - name: Build Frontend Assets
+      run: npm run build
 
-      # Upload artifact
-      - name: Upload artifact for deployment
-        uses: actions/upload-artifact@v4
-        with:
-          name: php-app
-          path: deployment.zip
+    - name: Create Deployment Package
+      run: zip -r deploy.zip . -x "*.git*" "node_modules/*" "tests/*" "storage/logs/*"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: laravel-app
+        path: deploy.zip
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
     environment:
-      name: 'Production'
+      name: 'production'
 
     steps:
-      # Download artifact
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: php-app
+    - name: Download Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: laravel-app
 
-      # Extract artifact
-      - name: Extract artifact
-        run: unzip deployment.zip
+    - name: Unzip Package
+      run: unzip deploy.zip
 
-      # Deploy to Azure
-      - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'portofolio-andrew'
-          slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
-          package: .
-
-      # Run post-deployment commands
-      - name: Run post-deployment commands
-        uses: azure/appservice-settings@v1
-        with:
-          app-name: 'portofolio-andrew'
-          slot-name: 'Production'
-          app-settings-json: |
-            [
-              {
-                "name": "POST_BUILD_COMMAND",
-                "value": "php artisan migrate --force && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan storage:link",
-                "slotSetting": false
-              }
-            ]
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: 'portofolio-andrew'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: .
