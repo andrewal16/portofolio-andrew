@@ -8,23 +8,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
 
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.3'
+        php-version: '8.2'        # sesuaikan dengan composer.json anda
         extensions: mbstring, pdo, pdo_pgsql, pgsql, bcmath, xml, curl, zip, gd
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-
-    - name: Copy .env
-      run: php -r "file_exists('.env') || copy('.env.example', '.env');"
 
     - name: Install Composer Dependencies
       run: composer install --no-dev --optimize-autoloader --no-interaction
@@ -35,8 +31,18 @@ jobs:
     - name: Build Frontend Assets
       run: npm run build
 
+    # Verifikasi public/build ada
+    - name: Verify build output
+      run: ls -la public/build
+
     - name: Create Deployment Package
-      run: zip -r deploy.zip . -x "*.git*" "node_modules/*" "tests/*" "storage/logs/*"
+      run: |
+        zip -r deploy.zip . \
+          -x "*.git*" \
+          -x "node_modules/*" \
+          -x "tests/*" \
+          -x "storage/logs/*" \
+          -x ".env"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
@@ -49,7 +55,6 @@ jobs:
     needs: build
     environment:
       name: 'production'
-
     steps:
     - name: Download Artifact
       uses: actions/download-artifact@v4
