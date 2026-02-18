@@ -5,53 +5,114 @@ echo "========================================="
 echo "🚀 Starting Laravel Deployment Setup..."
 echo "========================================="
 
+cd /home/site/wwwroot
+
 # ============================================================================
-# 1. CONFIGURE APACHE — Point document root to /public
+# 1. DETECT WEB SERVER (Apache or Nginx)
 # ============================================================================
-echo "📁 Configuring Apache document root..."
+if command -v nginx &> /dev/null; then
+    echo "🔍 Detected: Nginx"
 
-# Update Apache to serve from /home/site/wwwroot/public
-sed -i 's|/home/site/wwwroot|/home/site/wwwroot/public|g' /etc/apache2/sites-available/000-default.conf
+    # Create Nginx config pointing to /public
+    cat > /etc/nginx/sites-available/default << 'NGINX_CONF'
+server {
+    listen 8080 default_server;
+    listen [::]:8080 default_server;
 
-# Enable mod_rewrite for Laravel routing
-a2enmod rewrite
+    root /home/site/wwwroot/public;
+    index index.php index.html;
 
-# Allow .htaccess overrides (required for Laravel routing)
-cat > /etc/apache2/conf-available/laravel.conf << 'EOF'
+    server_name _;
+
+    # Handle Laravel routes
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # PHP-FPM
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php-fpm.sock;
+        fastcgi_read_timeout 300;
+    }
+
+    # Block .env and dotfiles
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Cache static assets
+    location ~* \.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+}
+NGINX_CONF
+
+    # Start PHP-FPM if not running
+    if ! pgrep php-fpm > /dev/null; then
+        php-fpm &
+        echo "✅ PHP-FPM started"
+    fi
+
+    nginx -t && nginx -s reload
+    echo "✅ Nginx configured and reloaded"
+
+elif command -v apache2 &> /dev/null; then
+    echo "🔍 Detected: Apache"
+
+    # Point document root to /public
+    sed -i 's|/home/site/wwwroot|/home/site/wwwroot/public|g' /etc/apache2/sites-available/000-default.conf
+
+    # Enable mod_rewrite
+    a2enmod rewrite
+
+    # Allow .htaccess overrides
+    cat > /etc/apache2/conf-available/laravel.conf << 'APACHE_CONF'
 <Directory /home/site/wwwroot/public>
     Options Indexes FollowSymLinks
     AllowOverride All
     Require all granted
 </Directory>
-EOF
+APACHE_CONF
 
-a2enconf laravel
+    a2enconf laravel
+    apache2ctl restart
+    echo "✅ Apache configured and restarted"
 
-echo "✅ Apache configured successfully"
+else
+    echo "❌ No web server detected!"
+    exit 1
+fi
 
 # ============================================================================
 # 2. SET PERMISSIONS
 # ============================================================================
-echo "🔒 Setting file permissions..."
+echo "🔒 Setting permissions..."
 
-cd /home/site/wwwroot
+mkdir -p storage/framework/{sessions,views,cache/data}
+mkdir -p storage/logs
+mkdir -p bootstrap/cache
 
-# Storage & cache directories need to be writable
 chmod -R 775 storage bootstrap/cache
-chown -R www-data:www-data storage bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 
-# Create storage link if not exists
+# Storage link
 if [ ! -L public/storage ]; then
-    php artisan storage:link --force
+    php artisan storage:link --force 2>/dev/null || true
     echo "✅ Storage link created"
 fi
 
 echo "✅ Permissions set"
 
 # ============================================================================
-# 3. CACHE CONFIGURATION (Production optimizations)
+# 3. CACHE & MIGRATE
 # ============================================================================
-echo "⚡ Caching configuration for production..."
+echo "⚡ Caching config..."
 
 php artisan config:cache
 php artisan route:cache
@@ -59,21 +120,8 @@ php artisan view:cache
 
 echo "✅ Cache built"
 
-# ============================================================================
-# 4. RUN MIGRATIONS
-# ============================================================================
-echo "🗃️ Running database migrations..."
-
+echo "🗃️ Running migrations..."
 php artisan migrate --force
-
-echo "✅ Migrations complete"
-
-# ============================================================================
-# 5. RESTART APACHE
-# ============================================================================
-echo "🔄 Restarting Apache..."
-
-apache2ctl restart
 
 echo "========================================="
 echo "✅ Laravel app is ready!"
