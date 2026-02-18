@@ -1,47 +1,80 @@
 #!/bin/bash
-echo "=== Starting Laravel Setup ==="
+set -e
 
-# ── Backup & Update Nginx Config ─────────────────────────────────────────
-cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.bak
+echo "========================================="
+echo "🚀 Starting Laravel Deployment Setup..."
+echo "========================================="
 
-cat > /etc/nginx/sites-available/default << 'EOF'
-server {
-    listen 8080;
-    listen [::]:8080;
-    root /home/site/wwwroot/public;
-    index index.php index.html;
+# ============================================================================
+# 1. CONFIGURE APACHE — Point document root to /public
+# ============================================================================
+echo "📁 Configuring Apache document root..."
 
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
+# Update Apache to serve from /home/site/wwwroot/public
+sed -i 's|/home/site/wwwroot|/home/site/wwwroot/public|g' /etc/apache2/sites-available/000-default.conf
 
-    location ~ \.php$ {
-        include fastcgi_params;
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-    }
+# Enable mod_rewrite for Laravel routing
+a2enmod rewrite
 
-    location ~ /\.(?!well-known).* {
-        deny all;
-    }
-}
+# Allow .htaccess overrides (required for Laravel routing)
+cat > /etc/apache2/conf-available/laravel.conf << 'EOF'
+<Directory /home/site/wwwroot/public>
+    Options Indexes FollowSymLinks
+    AllowOverride All
+    Require all granted
+</Directory>
 EOF
 
-# ── Permission ────────────────────────────────────────────────────────────
-chmod -R 775 /home/site/wwwroot/storage
-chmod -R 775 /home/site/wwwroot/bootstrap/cache
+a2enconf laravel
 
-# ── Laravel Commands ──────────────────────────────────────────────────────
+echo "✅ Apache configured successfully"
+
+# ============================================================================
+# 2. SET PERMISSIONS
+# ============================================================================
+echo "🔒 Setting file permissions..."
+
 cd /home/site/wwwroot
 
-php artisan storage:link --force   # ← kamu lupa ini juga!
+# Storage & cache directories need to be writable
+chmod -R 775 storage bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache
+
+# Create storage link if not exists
+if [ ! -L public/storage ]; then
+    php artisan storage:link --force
+    echo "✅ Storage link created"
+fi
+
+echo "✅ Permissions set"
+
+# ============================================================================
+# 3. CACHE CONFIGURATION (Production optimizations)
+# ============================================================================
+echo "⚡ Caching configuration for production..."
+
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+
+echo "✅ Cache built"
+
+# ============================================================================
+# 4. RUN MIGRATIONS
+# ============================================================================
+echo "🗃️ Running database migrations..."
+
 php artisan migrate --force
 
-# ── Restart Nginx ─────────────────────────────────────────────────────────
-echo "=== Restarting Nginx ==="
-service nginx restart              # ← INI YANG PALING PENTING, hilang sebelumnya!
+echo "✅ Migrations complete"
 
-echo "=== Setup Complete ==="
+# ============================================================================
+# 5. RESTART APACHE
+# ============================================================================
+echo "🔄 Restarting Apache..."
+
+apache2ctl restart
+
+echo "========================================="
+echo "✅ Laravel app is ready!"
+echo "========================================="
