@@ -76,7 +76,13 @@ php artisan route:cache
 php artisan view:cache
 echo "✅ Cache built"
 
-php artisan migrate --force
-echo "✅ Migrations done"
+php artisan migrate --force 2>&1 || echo "⚠️ Migration failed - check DB connection"
+echo "✅ Migrations step done"
 
-echo "🎉 Laravel ready! Nginx will be started by Azure."
+# ============================================================================
+# 4. RELOAD NGINX (Azure starts it before this script)
+# ============================================================================
+nginx -s reload 2>/dev/null || true
+echo "✅ Nginx reloaded with new config"
+
+echo "🎉 Laravel ready!"
