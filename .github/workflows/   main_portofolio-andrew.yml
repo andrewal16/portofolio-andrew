@@ -1,71 +1,94 @@
-name: Deploy Laravel to Azure
+name: Deploy Laravel to Azure App Service
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
+      # ====================================================================
+      # 1. CHECKOUT CODE
+      # ====================================================================
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.2'        # sesuaikan dengan composer.json anda
-        extensions: mbstring, pdo, pdo_pgsql, pgsql, bcmath, xml, curl, zip, gd
+      # ====================================================================
+      # 2. SETUP PHP
+      # ====================================================================
+      - name: 🐘 Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo, pdo_pgsql, pgsql, gd, curl, xml, zip, bcmath
+          coverage: none
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+      # ====================================================================
+      # 3. INSTALL COMPOSER DEPENDENCIES
+      # ====================================================================
+      - name: 📦 Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-    - name: Install Composer Dependencies
-      run: composer install --no-dev --optimize-autoloader --no-interaction
+      # ====================================================================
+      # 4. SETUP NODE.JS & BUILD FRONTEND
+      # ====================================================================
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
 
-    - name: Install NPM Dependencies
-      run: npm ci
+      - name: 📦 Install NPM dependencies
+        run: npm ci
 
-    - name: Build Frontend Assets
-      run: npm run build
+      - name: 🔨 Build frontend assets
+        run: npm run build
 
-    # Verifikasi public/build ada
-    - name: Verify build output
-      run: ls -la public/build
+      # ====================================================================
+      # 5. PREPARE DEPLOYMENT PACKAGE
+      # ====================================================================
+      - name: 🗑️ Remove dev files
+        run: |
+          rm -rf node_modules
+          rm -rf tests
+          rm -rf .git
+          rm -rf .github
+          rm -f .env
+          rm -f .env.example
+          rm -f phpunit.xml
+          rm -f vite.config.ts
 
-    - name: Create Deployment Package
-      run: |
-        zip -r deploy.zip . \
-          -x "*.git*" \
-          -x "node_modules/*" \
-          -x "tests/*" \
-          -x "storage/logs/*" \
-          -x ".env"
+      - name: 📁 Ensure storage structure exists
+        run: |
+          mkdir -p storage/framework/sessions
+          mkdir -p storage/framework/views
+          mkdir -p storage/framework/cache/data
+          mkdir -p storage/logs
+          mkdir -p bootstrap/cache
+          chmod -R 775 storage bootstrap/cache
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: laravel-app
-        path: deploy.zip
+      # ====================================================================
+      # 6. MAKE start.sh EXECUTABLE
+      # ====================================================================
+      - name: 🔧 Make start.sh executable
+        run: chmod +x start.sh
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: 'production'
-    steps:
-    - name: Download Artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: laravel-app
+      # ====================================================================
+      # 7. DEPLOY TO AZURE APP SERVICE
+      # ====================================================================
+      - name: 🚀 Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "portofolio-andrew"
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
 
-    # ❌ Hapus step "Unzip Package"
-
-    - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: 'portofolio-andrew'
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: deploy.zip        # ← langsung deploy .zip nya
+      # ====================================================================
+      # 8. POST-DEPLOY CONFIRMATION
+      # ====================================================================
+      - name: ✅ Deployment complete
+        run: echo "🎉 Successfully deployed to Azure App Service!"
