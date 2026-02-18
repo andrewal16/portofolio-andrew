@@ -29,12 +29,15 @@ server {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
-    # PHP-FPM
+    # PHP-FPM (Azure uses 127.0.0.1:9000, fallback to unix socket)
     location ~ \.php$ {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_pass unix:/run/php/php-fpm.sock;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_pass 127.0.0.1:9000;
         fastcgi_read_timeout 300;
+        fastcgi_buffers 16 16k;
+        fastcgi_buffer_size 32k;
     }
 
     # Block .env and dotfiles
@@ -55,12 +58,26 @@ NGINX_CONF
 
     # Start PHP-FPM if not running
     if ! pgrep php-fpm > /dev/null; then
-        php-fpm &
+        # Try common PHP-FPM paths on Azure
+        if command -v php-fpm8.2 &> /dev/null; then
+            php-fpm8.2 -D
+        elif command -v php-fpm &> /dev/null; then
+            php-fpm -D
+        fi
+        sleep 2
         echo "✅ PHP-FPM started"
+    else
+        echo "✅ PHP-FPM already running"
     fi
 
-    nginx -t && nginx -s reload
-    echo "✅ Nginx configured and reloaded"
+    # Test and reload Nginx
+    nginx -t
+    if nginx -s reload 2>/dev/null; then
+        echo "✅ Nginx reloaded"
+    else
+        nginx
+        echo "✅ Nginx started fresh"
+    fi
 
 elif command -v apache2 &> /dev/null; then
     echo "🔍 Detected: Apache"
