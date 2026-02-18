@@ -1,14 +1,18 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting Laravel setup..."
+echo "==========================================="
+echo "🚀 Starting Laravel Deployment Setup..."
+echo "==========================================="
 
 cd /home/site/wwwroot
 
 # ============================================================================
-# 1. CONFIGURE NGINX — Point to /public, port 8080
+# 1. CONFIGURE NGINX — Azure uses /home/site/nginx/default.conf
 # ============================================================================
-cat > /etc/nginx/sites-available/default << 'EOF'
+mkdir -p /home/site/nginx
+
+cat > /home/site/nginx/default.conf << 'EOF'
 server {
     listen 8080 default_server;
     listen [::]:8080 default_server;
@@ -33,7 +37,7 @@ server {
     error_page 404 /index.php;
 
     location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php-fpm.sock;
+        fastcgi_pass 127.0.0.1:9000;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
         fastcgi_read_timeout 300;
@@ -76,13 +80,19 @@ php artisan route:cache
 php artisan view:cache
 echo "✅ Cache built"
 
+# ============================================================================
+# 4. DATABASE MIGRATIONS
+# ============================================================================
+echo "🗃️ Running migrations..."
 php artisan migrate --force 2>&1 || echo "⚠️ Migration failed - check DB connection"
 echo "✅ Migrations step done"
 
 # ============================================================================
-# 4. RELOAD NGINX (Azure starts it before this script)
+# 5. RELOAD NGINX (Azure starts it before this script)
 # ============================================================================
 nginx -s reload 2>/dev/null || true
 echo "✅ Nginx reloaded with new config"
 
+echo "==========================================="
 echo "🎉 Laravel ready!"
+echo "==========================================="
