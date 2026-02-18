@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+# JANGAN pakai set -e, handle error manual
 
 echo "==========================================="
 echo "🚀 Starting Laravel Deployment Setup..."
@@ -8,11 +8,11 @@ echo "==========================================="
 cd /home/site/wwwroot
 
 # ============================================================================
-# 1. CONFIGURE NGINX — Azure uses /home/site/nginx/default.conf
+# 1. CONFIGURE NGINX
 # ============================================================================
 mkdir -p /home/site/nginx
 
-cat > /home/site/nginx/default.conf << 'EOF'
+cat > /home/site/nginx/default.conf << 'NGINXEOF'
 server {
     listen 8080 default_server;
     listen [::]:8080 default_server;
@@ -53,12 +53,17 @@ server {
         try_files $uri =404;
     }
 }
-EOF
+NGINXEOF
 
 echo "✅ Nginx config updated"
 
 # ============================================================================
-# 2. PERMISSIONS
+# 2. RELOAD NGINX SEGERA (jangan tunggu akhir script)
+# ============================================================================
+nginx -s reload 2>/dev/null && echo "✅ Nginx reloaded" || echo "⚠️ Nginx reload failed"
+
+# ============================================================================
+# 3. PERMISSIONS
 # ============================================================================
 mkdir -p storage/framework/{sessions,views,cache/data}
 mkdir -p storage/logs
@@ -73,25 +78,43 @@ fi
 echo "✅ Permissions set"
 
 # ============================================================================
-# 3. LARAVEL OPTIMIZATIONS
+# 4. GENERATE .env DARI AZURE APP SETTINGS (jika belum ada)
 # ============================================================================
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-echo "✅ Cache built"
+if [ ! -f .env ]; then
+    echo "⚠️ No .env found, creating from Azure env vars..."
+    cat > .env << ENVEOF
+APP_NAME="${APP_NAME:-Laravel}"
+APP_ENV="${APP_ENV:-production}"
+APP_KEY="${APP_KEY}"
+APP_DEBUG=${APP_DEBUG:-false}
+APP_URL="${APP_URL:-https://portofolio-andrew.azurewebsites.net}"
+
+DB_CONNECTION="${DB_CONNECTION:-pgsql}"
+DB_HOST="${DB_HOST}"
+DB_PORT="${DB_PORT:-5432}"
+DB_DATABASE="${DB_DATABASE}"
+DB_USERNAME="${DB_USERNAME}"
+DB_PASSWORD="${DB_PASSWORD}"
+
+SESSION_DRIVER="${SESSION_DRIVER:-file}"
+CACHE_STORE="${CACHE_STORE:-file}"
+QUEUE_CONNECTION="${QUEUE_CONNECTION:-sync}"
+ENVEOF
+    echo "✅ .env created from Azure environment"
+fi
 
 # ============================================================================
-# 4. DATABASE MIGRATIONS
+# 5. LARAVEL OPTIMIZATIONS (dengan error handling)
+# ============================================================================
+php artisan config:cache 2>&1 && echo "✅ Config cached" || echo "⚠️ Config cache failed"
+php artisan route:cache 2>&1 && echo "✅ Routes cached" || echo "⚠️ Route cache failed"
+php artisan view:cache 2>&1 && echo "✅ Views cached" || echo "⚠️ View cache failed"
+
+# ============================================================================
+# 6. DATABASE MIGRATIONS
 # ============================================================================
 echo "🗃️ Running migrations..."
-php artisan migrate --force 2>&1 || echo "⚠️ Migration failed - check DB connection"
-echo "✅ Migrations step done"
-
-# ============================================================================
-# 5. RELOAD NGINX (Azure starts it before this script)
-# ============================================================================
-nginx -s reload 2>/dev/null || true
-echo "✅ Nginx reloaded with new config"
+php artisan migrate --force 2>&1 || echo "⚠️ Migration failed"
 
 echo "==========================================="
 echo "🎉 Laravel ready!"
