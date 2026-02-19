@@ -9,8 +9,8 @@ cd /home/site/wwwroot || exit 1
 # ============================================================================
 # 1. CUSTOM NGINX CONFIG
 # ============================================================================
-# PENTING: Azure App Service PHP Linux membaca custom nginx config dari
-# /home/site/default (BUKAN /home/site/nginx/default.conf)
+# Azure App Service PHP Linux: custom nginx config di /home/site/default
+# Nginx sudah jalan SEBELUM script ini, jadi HARUS reload setelah tulis config
 # ============================================================================
 
 cat > /home/site/default << 'NGINXEOF'
@@ -18,7 +18,6 @@ server {
     listen 8080 default_server;
     listen [::]:8080 default_server;
 
-    # KUNCI: document root harus mengarah ke folder public Laravel
     root /home/site/wwwroot/public;
     index index.php index.html;
 
@@ -29,7 +28,6 @@ server {
 
     charset utf-8;
 
-    # Semua request yang bukan file/folder → diarahkan ke index.php (Laravel)
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
@@ -39,7 +37,6 @@ server {
 
     error_page 404 /index.php;
 
-    # PHP-FPM handler
     location ~ \.php$ {
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
@@ -49,12 +46,10 @@ server {
         fastcgi_buffer_size 32k;
     }
 
-    # Block dotfiles (kecuali .well-known)
     location ~ /\.(?!well-known).* {
         deny all;
     }
 
-    # Cache static assets (Vite build output)
     location /build/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
@@ -67,12 +62,20 @@ server {
         try_files $uri =404;
     }
 
-    # Increase max upload size
     client_max_body_size 20M;
 }
 NGINXEOF
 
 echo "✅ Nginx config written to /home/site/default"
+
+# KRITIS: Reload nginx karena dia sudah jalan sebelum script ini
+sleep 1
+nginx -s reload 2>&1 && echo "✅ Nginx reloaded with custom config" || echo "⚠️ Nginx reload failed"
+
+# Verifikasi root sudah benar
+echo "--- Nginx root check ---"
+nginx -T 2>&1 | grep "root " | head -3
+echo "---"
 
 # ============================================================================
 # 2. PERMISSIONS
@@ -96,17 +99,29 @@ else
 fi
 
 # ============================================================================
-# 4. LARAVEL OPTIMIZATIONS
+# 4. FIX DATABASE: Unset DB_URL
+# ============================================================================
+# Neon DB URL mengandung "options=endpoint=..." yang crash di Laravel.
+# Laravel akan fallback ke individual vars: DB_HOST, DB_PORT, DB_DATABASE, dll
+# yang sudah di-set di Azure App Settings.
+# ============================================================================
+if [ -n "$DB_URL" ]; then
+    echo "⚠️ DB_URL detected - unsetting to prevent Laravel options parsing error"
+    unset DB_URL
+fi
+
+# ============================================================================
+# 5. LARAVEL OPTIMIZATIONS
 # ============================================================================
 php artisan config:cache 2>&1 && echo "✅ Config cached" || echo "⚠️ Config cache failed"
 php artisan route:cache 2>&1 && echo "✅ Routes cached" || echo "⚠️ Route cache failed"
 php artisan view:cache 2>&1 && echo "✅ Views cached" || echo "⚠️ View cache failed"
 
 # ============================================================================
-# 5. DATABASE MIGRATIONS
+# 6. DATABASE MIGRATIONS
 # ============================================================================
 echo "🗃️ Running migrations..."
-php artisan migrate --force 2>&1 || echo "⚠️ Migration failed (mungkin sudah up-to-date)"
+php artisan migrate --force 2>&1 && echo "✅ Migrations complete" || echo "⚠️ Migration failed"
 
 echo "==========================================="
 echo "🎉 Laravel ready!"
