@@ -32,12 +32,18 @@ import PageLoader from './PageLoader';
 gsap.registerPlugin(ScrollTrigger, TextPlugin);
 
 export default function PortfolioIndex({
-    profile,
-    projects,
-    projectTypes,
-    certificates,
-    recent_blogs,
-    experiences,
+    profile = {
+        name: 'Developer',
+        bio: 'Welcome to my portfolio.',
+        avatar: '',
+        stats: null,
+        social: {}
+    },
+    projects = { data: [], next_page_url: null },
+    projectTypes = [],
+    certificates = { data: [], next_page_url: null },
+    recent_blogs = [],
+    experiences = [],
 }) {
     const { flash } = usePage().props;
     const [isLoading, setIsLoading] = useState(true);
@@ -104,8 +110,7 @@ export default function PortfolioIndex({
         { value: '10+', label: 'Tech Stack', icon: <GlobalOutlined /> },
         { value: 'Top 1%', label: 'AI4Impact', icon: <TrophyOutlined /> },
     ];
-    const stats = profile.stats || defaultStats;
-
+    const stats = profile?.stats || defaultStats;
     // ========== PROJECT TYPE ICONS ==========
     const projectTypeIcons = {
         'Web App': <CodeOutlined />,
