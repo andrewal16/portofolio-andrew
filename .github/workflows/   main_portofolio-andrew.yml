@@ -61,6 +61,9 @@ jobs:
           rm -f .env.example
           rm -f phpunit.xml
           rm -f vite.config.ts
+          rm -f tailwind.config.js
+          rm -f postcss.config.js
+          rm -f tsconfig.json
 
       - name: 📁 Ensure storage structure exists
         run: |
@@ -72,13 +75,29 @@ jobs:
           chmod -R 775 storage bootstrap/cache
 
       # ====================================================================
-      # 6. MAKE start.sh EXECUTABLE
+      # 6. VERIFY DEPLOYMENT PACKAGE
+      # ====================================================================
+      - name: 🔍 Verify critical files exist
+        run: |
+          echo "=== Checking critical files ==="
+          test -f public/index.php && echo "✅ public/index.php exists" || (echo "❌ public/index.php MISSING!" && exit 1)
+          test -d vendor && echo "✅ vendor/ exists" || (echo "❌ vendor/ MISSING!" && exit 1)
+          test -f artisan && echo "✅ artisan exists" || (echo "❌ artisan MISSING!" && exit 1)
+          test -f start.sh && echo "✅ start.sh exists" || (echo "❌ start.sh MISSING!" && exit 1)
+          test -d public/build && echo "✅ public/build/ exists (Vite)" || echo "⚠️ public/build/ missing (no Vite assets?)"
+          echo "=== Listing public/ ==="
+          ls -la public/
+          echo "=== Listing root ==="
+          ls -la
+
+      # ====================================================================
+      # 7. MAKE start.sh EXECUTABLE
       # ====================================================================
       - name: 🔧 Make start.sh executable
         run: chmod +x start.sh
 
       # ====================================================================
-      # 7. DEPLOY TO AZURE APP SERVICE
+      # 8. DEPLOY TO AZURE APP SERVICE
       # ====================================================================
       - name: 🚀 Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -88,7 +107,7 @@ jobs:
           package: .
 
       # ====================================================================
-      # 8. POST-DEPLOY CONFIRMATION
+      # 9. POST-DEPLOY CONFIRMATION
       # ====================================================================
       - name: ✅ Deployment complete
         run: echo "🎉 Successfully deployed to Azure App Service!"
