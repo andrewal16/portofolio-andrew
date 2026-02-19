@@ -2,16 +2,20 @@
 # Handle error manual, jangan pakai set -e
 
 echo "==========================================="
-echo "🚀 Starting Laravel Deployment Setup..."
+echo "🚀 Starting Laravel Deployment Setup v2..."
 echo "==========================================="
 
 cd /home/site/wwwroot || exit 1
 
 # ============================================================================
-# 1. CONFIGURE NGINX — CRITICAL FIX
+# 1. CLEANUP OLD NGINX CONFIGS (dari percobaan sebelumnya)
 # ============================================================================
-# Azure PHP Linux container reads custom config from /home/site/default
-# NOT from /home/site/nginx/default.conf
+rm -f /home/site/nginx/default.conf 2>/dev/null
+rm -rf /home/site/nginx 2>/dev/null
+echo "✅ Old nginx configs cleaned"
+
+# ============================================================================
+# 2. CONFIGURE NGINX — write to /home/site/default
 # ============================================================================
 cat > /home/site/default << 'NGINXEOF'
 server {
@@ -58,11 +62,16 @@ NGINXEOF
 
 echo "✅ Nginx config written to /home/site/default"
 
-# Reload nginx (mungkin belum jalan saat startup, tapi kita coba)
-nginx -s reload 2>/dev/null && echo "✅ Nginx reloaded" || echo "⚠️ Nginx reload skipped (will pick up config on start)"
+# Debug: verify file content
+echo "--- Nginx root verification ---"
+grep "root " /home/site/default
+echo "--- End verification ---"
+
+# Reload nginx
+nginx -s reload 2>/dev/null && echo "✅ Nginx reloaded" || echo "⚠️ Nginx reload skipped (will pick up on start)"
 
 # ============================================================================
-# 2. PERMISSIONS
+# 3. PERMISSIONS
 # ============================================================================
 mkdir -p storage/framework/{sessions,views,cache/data}
 mkdir -p storage/logs
@@ -73,7 +82,7 @@ chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 echo "✅ Permissions set"
 
 # ============================================================================
-# 3. STORAGE LINK
+# 4. STORAGE LINK
 # ============================================================================
 if [ ! -L public/storage ]; then
     php artisan storage:link --force 2>/dev/null || true
@@ -81,10 +90,7 @@ if [ ! -L public/storage ]; then
 fi
 
 # ============================================================================
-# 4. GENERATE .env DARI AZURE APP SETTINGS (jika belum ada)
-# ============================================================================
-# Selalu regenerate .env dari Azure env vars untuk memastikan sync
-# Azure App Settings = source of truth
+# 5. GENERATE .env — TANPA DB_URL (penyebab error array_diff_key)
 # ============================================================================
 echo "📝 Generating .env from Azure environment variables..."
 cat > .env << ENVEOF
@@ -104,7 +110,6 @@ DB_DATABASE="${DB_DATABASE}"
 DB_USERNAME="${DB_USERNAME}"
 DB_PASSWORD="${DB_PASSWORD}"
 DB_SSLMODE="${DB_SSLMODE:-require}"
-DB_URL="${DB_URL}"
 
 FILESYSTEM_DISK="${FILESYSTEM_DISK:-local}"
 
@@ -127,21 +132,25 @@ QUEUE_CONNECTION="${QUEUE_CONNECTION:-sync}"
 VITE_TINYMCE_API_KEY="${VITE_TINYMCE_API_KEY}"
 ENVEOF
 
-echo "✅ .env generated from Azure environment"
+echo "✅ .env generated (DB_URL excluded intentionally)"
 
 # ============================================================================
-# 5. LARAVEL OPTIMIZATIONS
+# 6. LARAVEL OPTIMIZATIONS
 # ============================================================================
 echo "⚡ Running Laravel optimizations..."
+php artisan config:clear 2>&1
 php artisan config:cache 2>&1 && echo "✅ Config cached" || echo "⚠️ Config cache failed"
 php artisan route:cache 2>&1 && echo "✅ Routes cached" || echo "⚠️ Route cache failed"
 php artisan view:cache 2>&1 && echo "✅ Views cached" || echo "⚠️ View cache failed"
 
 # ============================================================================
-# 6. DATABASE MIGRATIONS
+# 7. DATABASE MIGRATIONS
 # ============================================================================
+echo "🗃️ Testing database connection..."
+php artisan db:monitor 2>&1 || echo "⚠️ DB monitor not available"
+
 echo "🗃️ Running migrations..."
-php artisan migrate --force 2>&1 && echo "✅ Migrations done" || echo "⚠️ Migration failed (check DB connection)"
+php artisan migrate --force 2>&1 && echo "✅ Migrations done" || echo "⚠️ Migration failed"
 
 echo "==========================================="
 echo "🎉 Laravel ready! Nginx root → /home/site/wwwroot/public"
