@@ -1,0 +1,86 @@
+# render.yaml — Render Blueprint Spec
+# Place this file at the root of your repository
+# Docs: https://docs.render.com/blueprint-spec
+
+services:
+  - type: web
+    name: portfolio-andrew
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: singapore  # closest to Neon AP-Southeast-1
+    plan: starter      # $7/mo — or use "free" for testing
+    healthCheckPath: /up
+    envVars:
+      # ============ Laravel Core ============
+      - key: APP_NAME
+        value: "Portfolio Andrew"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        generateValue: false  # Set manually!
+      - key: APP_URL
+        value: "https://portfolio-andrew.onrender.com"
+
+      # ============ Database (Neon) ============
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        sync: false  # Set manually in dashboard
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_SSLMODE
+        value: require
+
+      # ============ Cloudinary ============
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_SECURE
+        value: "true"
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: FILESYSTEM_DISK
+        value: cloudinary
+
+      # ============ Session & Cache ============
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+
+      # ============ Mail (Gmail) ============
+      - key: MAIL_MAILER
+        value: smtp
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM_ADDRESS
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: "Portfolio Andrew"
+
+      # ============ Other ============
+      - key: BCRYPT_ROUNDS
+        value: "12"
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: VITE_TINYMCE_API_KEY
+        sync: false

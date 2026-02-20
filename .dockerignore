@@ -1,0 +1,43 @@
+# Dependencies (will be installed during build)
+/node_modules
+/vendor
+
+# Build output (will be rebuilt)
+/public/build
+/public/hot
+
+# Environment files
+.env
+.env.backup
+.env.production
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Testing & Dev tools
+/tests
+phpunit.xml
+.phpunit.result.cache
+/coverage
+
+# Docker (don't nest)
+docker-compose*.yml
+
+# Logs
+/storage/logs/*
+!/storage/logs/.gitkeep
+
+# Misc
+README.md
+LICENSE
+*.md
