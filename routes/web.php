@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 // ============================================================================
-// 🏠 ROOT REDIRECT - Auto redirect ke /portfolio
+// 🏠 ROOT REDIRECT
 // ============================================================================
 Route::get('/', function () {
     return redirect('/portfolio');
@@ -32,15 +32,37 @@ Route::get('/portfolio/experience/{slug}', [PortfolioController::class, 'showExp
 Route::get('/portfolio/blog/{slug}', [PortfolioController::class, 'showBlog'])
     ->name('portfolio.blog.show');
 
-// Redirect typo 'portofolio' ke 'portfolio'
-Route::get('/portofolio', function () {
-    return redirect('/portfolio', 301);
+// Redirect typo
+Route::get('/portofolio', fn() => redirect('/portfolio', 301));
+
+// ============================================================================
+// 📡 PUBLIC API ROUTES — PORTFOLIO DATA ENDPOINTS
+// ============================================================================
+// ⚠️ INI YANG SEBELUMNYA TIDAK ADA!
+// Frontend memanggil URL ini saat user klik tab filter Projects/Certificates.
+// Tanpa routes ini → 404 → UI "patah-patah" saat filter.
+//
+// Kenapa di web.php bukan api.php?
+// Karena Laravel Inertia app biasanya menggunakan session-based auth,
+// dan api.php menggunakan middleware 'api' (stateless, token-based).
+// Dengan prefix '/api/portfolio' di web.php, kita tetap punya akses
+// ke session & CSRF jika diperlukan nanti, sambil memisahkan
+// JSON endpoints dari Inertia pages secara visual.
+// ============================================================================
+Route::prefix('api/portfolio')->group(function () {
+
+    // GET /api/portfolio/projects?type=Web+App&per_page=6&page=1
+    Route::get('/projects', [PortfolioController::class, 'getProjects'])
+        ->name('api.portfolio.projects');
+
+    // GET /api/portfolio/certificates?category=learning&per_page=6&page=1
+    Route::get('/certificates', [PortfolioController::class, 'getCertificates'])
+        ->name('api.portfolio.certificates');
 });
 
 // ============================================================================
-// 🎯 PROJECT & BLOG PUBLIC ROUTES
+// 🎯 PROJECT & BLOG PUBLIC ROUTES (Legacy/Alternate URLs)
 // ============================================================================
-
 Route::get('/projects/{project:slug}', function (\App\Models\Project $project) {
     $project->load(['publishedBlogPosts' => function ($query) {
         $query->select('id', 'project_id', 'title', 'slug', 'content', 'published_at')
@@ -98,21 +120,19 @@ Route::post('/contact/send', [PortfolioController::class, 'sendMessage'])
     ->name('contact.send');
 
 // ============================================================================
-// 🔒 ADMIN ROUTES - HARUS LOGIN DULU!
+// 🔒 ADMIN ROUTES
 // ============================================================================
 Route::prefix('admin')
     ->name('admin.')
     ->middleware(['auth:sanctum', 'verified'])
     ->group(function () {
-        // Dashboard redirect ke project index
-        Route::get('/dashboard', function () {
-            return redirect()->route('admin.project.index');
-        })->name('dashboard');
+        Route::get('/dashboard', fn() => redirect()->route('admin.project.index'))
+            ->name('dashboard');
 
         // Projects CRUD
         Route::resource('project', ProjectController::class)->except(['show']);
 
-        // ✅ Experiences CRUD + Reorder
+        // Experiences CRUD + Reorder
         Route::resource('experience', ExperienceController::class)->except(['show']);
         Route::post('experience/reorder', [ExperienceController::class, 'reorder'])
             ->name('experience.reorder');
@@ -122,26 +142,32 @@ Route::prefix('admin')
 
         // Blog Posts CRUD
         Route::resource('blog-posts', BlogPostController::class);
-
         Route::patch('blog-posts/{blog_post}/toggle-publish', [BlogPostController::class, 'togglePublish'])
             ->name('blog-posts.toggle-publish');
 
-        // Tag management
+        // Tags
         Route::prefix('tags')->name('tags.')->group(function () {
             Route::get('/', [TagController::class, 'index'])->name('index');
             Route::post('/', [TagController::class, 'store'])->name('store');
             Route::delete('/{tag}', [TagController::class, 'destroy'])->name('destroy');
         });
+
+        // ================================================================
+        // 🧹 CACHE MANAGEMENT (Optional, tapi sangat berguna)
+        // ================================================================
+        // Tombol "Clear Cache" di admin panel jika diperlukan
+        Route::post('/cache/clear-portfolio', function () {
+            PortfolioController::clearAllCache();
+            return back()->with('success', 'Portfolio cache berhasil dihapus!');
+        })->name('cache.clear-portfolio');
     });
 
 // ============================================================================
-// 🔧 SETTINGS & AUTH ROUTES
+// 🔧 SETTINGS & AUTH
 // ============================================================================
 require __DIR__.'/settings.php';
 
 // ============================================================================
-// 🚨 FALLBACK - Redirect semua route yang tidak ada ke /portfolio
+// 🚨 FALLBACK
 // ============================================================================
-Route::fallback(function () {
-    return redirect('/portfolio');
-});
+Route::fallback(fn() => redirect('/portfolio'));
