@@ -2,29 +2,32 @@
 
 namespace App\Providers;
 
+use App\Models\BlogPost;
 use App\Models\Certificate;
+use App\Models\Experience;
+use App\Models\Project;
+use App\Observers\BlogPostObserver;
 use App\Observers\CertificateObserver;
-use Illuminate\Support\ServiceProvider;
+use App\Observers\ExperienceObserver;
+use App\Observers\ProjectObserver;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        //
+        Project::observe(ProjectObserver::class);
         Certificate::observe(CertificateObserver::class);
-        if($this->app->environment('production')) {
+        Experience::observe(ExperienceObserver::class);
+        BlogPost::observe(BlogPostObserver::class);
+
+        if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }
     }

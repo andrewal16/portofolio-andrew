@@ -7,35 +7,32 @@ use Illuminate\Support\Facades\Cache;
 
 class CertificateObserver
 {
-    /**
-     * Handle the Certificate "created" event.
-     */
     public function created(Certificate $certificate): void
     {
         $this->clearCertificatesCache();
     }
 
-    /**
-     * Handle the Certificate "updated" event.
-     */
     public function updated(Certificate $certificate): void
     {
         $this->clearCertificatesCache();
     }
 
-    /**
-     * Handle the Certificate "deleted" event.
-     */
     public function deleted(Certificate $certificate): void
     {
         $this->clearCertificatesCache();
     }
 
-    /**
-     * Clear certificates cache
-     */
     private function clearCertificatesCache(): void
     {
-        Cache::forget('certificates:all');
+        Cache::forget('portfolio:certificates:initial');
+
+        $categories = ['all', 'learning', 'competition'];
+        foreach ($categories as $category) {
+            for ($page = 1; $page <= 5; $page++) {
+                foreach ([6, 9, 12] as $perPage) {
+                    Cache::forget("portfolio:certs:cat_{$category}:page_{$page}:per_{$perPage}");
+                }
+            }
+        }
     }
 }
